@@ -221,9 +221,16 @@ function M.hide()
   M.win = nil
 end
 
---- Back to the code.
+--- The code window you were in last (this tab).
+---@type integer?
+M.last_code = nil
+
+--- Back to the code: the window you were in last, else any in this tab.
 function M.to_editor()
-  local win = util.code_win()
+  local win = M.last_code
+  if not (win and vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_tabpage(win) == vim.api.nvim_get_current_tabpage()) then
+    win = util.code_win()
+  end
   if win then
     vim.api.nvim_set_current_win(win)
   else
@@ -625,6 +632,37 @@ function M.show_run(run, focus)
 end
 
 function M.setup()
+  -- However the panel goes -- q, the toggle, a :close or a close-window key
+  -- of your own -- focus lands back in the code you came from, not wherever
+  -- Neovim's own rules put it (the explorer, as often as not).
+  local group = vim.api.nvim_create_augroup("aedi_console_focus", { clear = true })
+  vim.api.nvim_create_autocmd("WinEnter", {
+    group = group,
+    callback = function()
+      local win = vim.api.nvim_get_current_win()
+      if util.is_code_win(win) then
+        M.last_code = win
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    callback = function(args)
+      local closed = tonumber(args.match)
+      if not closed or closed ~= M.win then
+        return
+      end
+      local was_current = vim.api.nvim_get_current_win() == closed
+      M.win = nil
+      if was_current then
+        vim.schedule(function()
+          if not util.is_code_win(vim.api.nvim_get_current_win()) then
+            M.to_editor()
+          end
+        end)
+      end
+    end,
+  })
   local function link(name, to)
     vim.api.nvim_set_hl(0, name, { link = to, default = true })
   end
