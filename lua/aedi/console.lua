@@ -97,8 +97,8 @@ local HINT = {
   { "Ctrl-C", "stop" },
   { "x", "close tab" },
   { "e", "edit" },
-  { "Enter", "open" },
-  { "Tab", "next" },
+  { "Enter", "go to source" },
+  { "Tab", "next run" },
   { "q", "hide" },
 }
 
