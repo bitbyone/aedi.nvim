@@ -67,6 +67,12 @@ local function names(list)
     return c.name
   end, list)
 end
+test("detect: no gradle run without the application plugin", function()
+  local root = tmp .. "/norun"
+  write(root .. "/gradlew", "")
+  write(root .. "/build.gradle.kts", 'plugins { kotlin("jvm") }')
+  eq(names(detect.all(root)), { "gradle test", "gradle build" })
+end)
 test("detect: go", function()
   local root = tmp .. "/go"
   write(root .. "/go.mod", "module x\n")
@@ -78,6 +84,7 @@ end)
 test("detect: gradle, npm, make", function()
   local root = tmp .. "/jvm"
   write(root .. "/gradlew", "")
+  write(root .. "/build.gradle.kts", "plugins {\n    application\n}\n")
   write(root .. "/package.json", '{"scripts":{"test":"vitest","dev":"vite"}}')
   write(root .. "/pnpm-lock.yaml", "")
   write(root .. "/Makefile", "VAR := 1\n.PHONY: all\nall: build\nbuild:\n\tgo build\n")

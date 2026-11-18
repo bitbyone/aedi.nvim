@@ -59,14 +59,20 @@ local function gradle(root)
       task("mvn package", "package", "build"),
     }
   end
-  return {
-    task("gradle run", "run", "run"),
+  -- `run` exists only with the `application` plugin; Spring Boot apps are
+  -- their own configurations.
+  local build = (read(root .. "/build.gradle.kts") or read(root .. "/build.gradle") or "")
+  local has_run = ("\n" .. build):match("\n%s*application%s*\n") ~= nil -- plugins { application }
+    or build:match("id%s*%(?%s*[\"']application[\"']") ~= nil -- id("application")
+  local out = {}
+  if has_run then
+    out[#out + 1] = task("gradle run", "run", "run")
+  end
+  vim.list_extend(out, {
     task("gradle test", "test", "test"),
     task("gradle build", "build", "build"),
-    -- Suspends the JVM on port 5005 until a debugger attaches.
-    task("gradle run --debug-jvm", "run --debug-jvm"),
-    task("gradle test --debug-jvm", "test --debug-jvm"),
-  }
+  })
+  return out
 end
 
 --- A Spring Boot configuration per application in the project.
