@@ -54,7 +54,7 @@ function M.visible()
 end
 
 local function running(run)
-  return run.code == nil
+  return run.code == nil and not run.idle
 end
 M.running = running
 
@@ -69,7 +69,9 @@ local function duration(run)
 end
 
 local function status(run)
-  if running(run) then
+  if run.idle then
+    return "○"
+  elseif running(run) then
     return "●"
   elseif run.stopping then
     return "■"
@@ -131,6 +133,16 @@ local function empty()
   return empty_buf
 end
 
+--- An external tab (IntelliJ's output) has no configuration to edit.
+local function hint_for(run)
+  if run and run.external then
+    return vim.tbl_filter(function(h)
+      return h[1] ~= "e"
+    end, HINT)
+  end
+  return HINT
+end
+
 function M.render()
   if not valid_win() then
     return
@@ -143,11 +155,12 @@ function M.render()
   for i, run in ipairs(M.runs) do
     local sel = i == M.current
     local hl = sel and "%#AediTabSel#" or "%#AediTab#"
-    local icon_hl = (running(run) and "%#AediRunning#")
+    local icon_hl = (run.idle and hl)
+      or (running(run) and "%#AediRunning#")
       or (run.stopping and hl)
       or (run.code == 0 and "%#AediPassed#" or "%#AediFailed#")
     local tail = ""
-    if not running(run) then
+    if not running(run) and not run.idle then
       tail = (run.code ~= 0 and not run.stopping) and (" " .. run.code) or (" " .. duration(run))
     end
     parts[#parts + 1] = ("%%%d@v:lua.AediConsoleTab@%s %s%s%s %s%s %%X"):format(
@@ -160,7 +173,7 @@ function M.render()
       tail
     )
   end
-  vim.wo[M.win].winbar = table.concat(parts, "%#AediTabFill# ") .. "%#AediTabFill#%=" .. require("aedi.hints").statusline(HINT)
+  vim.wo[M.win].winbar = table.concat(parts, "%#AediTabFill# ") .. "%#AediTabFill#%=" .. require("aedi.hints").statusline(hint_for(M.current_run()))
 end
 
 -- ---------------------------------------------------------------------------
@@ -268,6 +281,14 @@ function M.stop(run)
   if not (run and running(run)) then
     return false
   end
+  if run.external then
+    run.stopping = true
+    if run.stop then
+      run.stop()
+    end
+    M.render()
+    return true
+  end
   if run.stopping then
     vim.fn.jobstop(run.job)
   else
@@ -283,6 +304,14 @@ function M.close(i)
   i = i or M.current
   local run = i and M.runs[i]
   if not run then
+    return
+  end
+  if run.external then
+    -- the buffer is its owner's; a running program stops with its tab
+    if running(run) and run.stop then
+      run.stop()
+    end
+    M.forget(run)
     return
   end
   if running(run) then
@@ -326,7 +355,13 @@ local function map(buf, run)
   k("q", M.hide, "Hide the Run panel")
   k("<Esc>", M.to_editor, "Back to the editor")
   k("r", function()
-    M.start(run.config)
+    if run.external then
+      if run.rerun then
+        run.rerun()
+      end
+    else
+      M.start(run.config)
+    end
   end, "Rerun")
   k("<C-c>", function()
     M.stop(run)
@@ -335,6 +370,10 @@ local function map(buf, run)
     M.close(index_of(run))
   end, "Close the tab")
   k("e", function()
+    if run.external then
+      vim.notify(run.config.name .. " is not a run configuration of aedi's", vim.log.levels.INFO)
+      return
+    end
     require("aedi.editor").open(run.config)
   end, "Edit the configuration")
   k("<CR>", function()
@@ -412,7 +451,7 @@ function M.start(c)
   end
   local slot
   for i, r in ipairs(M.runs) do
-    if r.config.name == c.name then
+    if r.config.name == c.name and not r.external then
       slot = i
       break
     end
@@ -486,6 +525,103 @@ function M.start(c)
   M.render()
   require("aedi.store").set_last(c)
   return run
+end
+
+--- A tab for output another plugin writes into a buffer of its own (an
+--- IntelliJ launch): `key` names the tab, so the same producer keeps one.
+--- Starts idle (○); `set_state` says when its program runs and ends.
+---@param spec { key: string, name: string, buf: integer, stop?: fun(), rerun?: fun(), cwd?: string }
+---@return aedi.Run
+function M.external(spec)
+  local run
+  for _, r in ipairs(M.runs) do
+    if r.external and r.key == spec.key then
+      run = r
+    end
+  end
+  if not run then
+    next_id = next_id + 1
+    run = {
+      id = next_id,
+      key = spec.key,
+      external = true,
+      idle = true,
+      config = { name = spec.name },
+      started = vim.uv.now(),
+    }
+    M.runs[#M.runs + 1] = run
+  end
+  run.config.name = spec.name or run.config.name
+  run.stop, run.rerun = spec.stop, spec.rerun
+  run.cwd = spec.cwd or util.root()
+  if run.buf ~= spec.buf then
+    run.buf = spec.buf
+    map(spec.buf, run)
+    -- Follow the end of the output while the cursor is on the last line, as
+    -- a terminal tab does (its producer follows only its own window).
+    vim.api.nvim_buf_attach(spec.buf, false, {
+      on_lines = function(_, b, _, first)
+        if run.buf ~= b then
+          return true
+        end
+        vim.schedule(function()
+          if valid_win() and vim.api.nvim_win_get_buf(M.win) == b and vim.api.nvim_buf_is_valid(b) then
+            if vim.api.nvim_win_get_cursor(M.win)[1] >= first then
+              pcall(vim.api.nvim_win_set_cursor, M.win, { vim.api.nvim_buf_line_count(b), 0 })
+            end
+          end
+        end)
+      end,
+    })
+    vim.api.nvim_create_autocmd("BufWipeout", {
+      buffer = spec.buf,
+      once = true,
+      callback = function()
+        vim.schedule(function()
+          if run.buf == spec.buf then
+            M.forget(run)
+          end
+        end)
+      end,
+    })
+  end
+  M.render()
+  return run
+end
+
+--- An external tab's program started ("running") or ended ("exited").
+---@param run aedi.Run
+---@param state "running"|"exited"
+---@param code? integer
+function M.set_state(run, state, code)
+  if state == "running" then
+    run.idle, run.code, run.ended, run.stopping = false, nil, nil, nil
+    run.started = vim.uv.now()
+  else
+    if run.idle or run.code ~= nil then
+      return
+    end
+    run.code = code or 0
+    run.ended = vim.uv.now()
+    if not M.visible() then
+      vim.notify(
+        ("%s %s"):format(run.config.name, run.stopping and "stopped" or (run.code == 0 and "finished" or ("failed (" .. run.code .. ")"))),
+        (run.code == 0 or run.stopping) and vim.log.levels.INFO or vim.log.levels.ERROR
+      )
+    end
+  end
+  M.render()
+end
+
+--- Show `run`'s tab.
+---@param run aedi.Run
+---@param focus? boolean
+function M.show_run(run, focus)
+  local i = index_of(run)
+  if i then
+    M.current = i
+    M.show(focus)
+  end
 end
 
 function M.setup()
