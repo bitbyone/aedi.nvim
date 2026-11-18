@@ -92,10 +92,52 @@ function _G.AediConsoleTab(i, _, button)
   end
 end
 
-local HINT = " r rerun  ^C stop  x close  e edit  ⏎ open "
+local HINT = {
+  { "r", "rerun" },
+  { "Ctrl-C", "stop" },
+  { "x", "close tab" },
+  { "e", "edit" },
+  { "Enter", "open" },
+  { "Tab", "next" },
+  { "q", "hide" },
+}
+
+--- What the panel shows with no tab: how to get one.
+local empty_buf
+
+local EMPTY_HINT = { { "q", "hide" }, { "Esc", "editor" } }
+
+local function empty()
+  if empty_buf and vim.api.nvim_buf_is_valid(empty_buf) then
+    return empty_buf
+  end
+  empty_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[empty_buf].bufhidden = "hide"
+  vim.api.nvim_buf_set_lines(empty_buf, 0, -1, false, {
+    "",
+    "  Nothing is running.",
+    "",
+    "  :AediRun picks a configuration and runs it here; :AediExec runs a command.",
+  })
+  vim.bo[empty_buf].modifiable = false
+  vim.bo[empty_buf].filetype = "aedi-console"
+  local ns = vim.api.nvim_create_namespace("aedi_empty")
+  vim.api.nvim_buf_set_extmark(empty_buf, ns, 1, 0, { end_row = 4, hl_group = "AediHint", hl_eol = false })
+  vim.keymap.set("n", "q", function()
+    M.hide()
+  end, { buffer = empty_buf, nowait = true, desc = "Hide the Run panel" })
+  vim.keymap.set("n", "<Esc>", function()
+    M.to_editor()
+  end, { buffer = empty_buf, nowait = true, desc = "Back to the editor" })
+  return empty_buf
+end
 
 function M.render()
   if not valid_win() then
+    return
+  end
+  if #M.runs == 0 then
+    vim.wo[M.win].winbar = "%#AediTabFill#%=" .. require("aedi.hints").statusline(EMPTY_HINT)
     return
   end
   local parts = {}
@@ -119,7 +161,7 @@ function M.render()
       tail
     )
   end
-  vim.wo[M.win].winbar = table.concat(parts, "%#AediTabFill# ") .. "%#AediTabFill#%=%#AediHint#" .. HINT
+  vim.wo[M.win].winbar = table.concat(parts, "%#AediTabFill# ") .. "%#AediTabFill#%=" .. require("aedi.hints").statusline(HINT)
 end
 
 -- ---------------------------------------------------------------------------
@@ -142,18 +184,15 @@ end
 ---@param focus? boolean
 function M.show(focus)
   local run = M.current_run()
-  if not run then
-    vim.notify("Nothing has run yet", vim.log.levels.INFO)
-    return
-  end
   if valid_win() and not M.visible() then
     pcall(vim.api.nvim_win_close, M.win, true)
   end
   if not valid_win() then
     open_win()
   end
-  if vim.api.nvim_win_get_buf(M.win) ~= run.buf then
-    vim.api.nvim_win_set_buf(M.win, run.buf)
+  local buf = run and run.buf or empty()
+  if vim.api.nvim_win_get_buf(M.win) ~= buf then
+    vim.api.nvim_win_set_buf(M.win, buf)
     util.bare(M.win)
   end
   M.render()
@@ -265,8 +304,11 @@ function M.forget(run)
   end
   table.remove(M.runs, i)
   if #M.runs == 0 then
+    -- the panel stays, empty: closing the last tab is not closing the panel
     M.current = nil
-    M.hide()
+    if valid_win() then
+      M.show()
+    end
     return
   end
   if M.current > i then
@@ -474,7 +516,6 @@ function M.setup()
   link("AediTab", "TabLine")
   link("AediTabSel", "TabLineSel")
   link("AediTabFill", "TabLineFill")
-  link("AediHint", "Comment")
   link("AediRunning", "DiagnosticInfo")
   link("AediPassed", "DiagnosticOk")
   link("AediFailed", "DiagnosticError")

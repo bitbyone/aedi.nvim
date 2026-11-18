@@ -1,6 +1,6 @@
 # aedi.nvim
 
-Run configurations, a Run panel and a debug strip for Neovim, the way IntelliJ
+Run configurations, a Run panel and a Debug panel for Neovim, the way IntelliJ
 IDEA has them. ("aedi" is "idea" backwards.)
 
 - **Run configurations**: any shell command with its arguments, working
@@ -10,7 +10,7 @@ IDEA has them. ("aedi" is "idea" backwards.)
 - **Run panel**: a split across the bottom with one tab per configuration.
   Each tab is a terminal, so colours and stdin work. Its winbar shows status
   and exit code. `<CR>` on a stack frame or `file:line` opens it.
-- **Debug strip** (nvim-dap-ui): frames, variables and watches across the
+- **Debug panel** (nvim-dap-ui): frames, variables and watches across the
   bottom, with a Console tab beside Variables. Long values open in a framed,
   wrapped popup.
 
@@ -133,7 +133,7 @@ These hooks go into the nvim-dap-ui spec:
 }
 ```
 
-Then choose which sessions get the strip instead of dap-ui's own layout:
+Then choose which sessions get the Debug panel instead of dap-ui's own layout:
 
 ```lua
 require("aedi.debug").listen(function(session) return session.config.type == "delve" end)
@@ -142,9 +142,9 @@ require("aedi.debug").listen(function(session) return session.config.type == "de
 The Console tab of such a session is the current tab of the Run panel. For
 [intellij-lsp.nvim](https://github.com/JetBrains/intellij-lsp.nvim), call
 `require("aedi.integrations.intellij_lsp").setup()` after its setup. Its
-sessions then get the strip, with the plugin's run output as the Console tab.
+sessions then get the Debug panel, with the plugin's run output as the Console tab.
 
-`require("aedi.debug").toggle()` hides the strip, or brings it back, while a
+`require("aedi.debug").toggle()` hides the Debug panel, or brings it back, while a
 session is running.
 
 ## Tests

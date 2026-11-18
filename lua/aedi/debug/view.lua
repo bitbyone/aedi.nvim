@@ -1,8 +1,8 @@
--- The debug strip: IntelliJ's Debug tool window, in the view you are already
+-- The Debug panel: IntelliJ's Debug tool window, in the view you are already
 -- in. nvim-dap-ui's layout 1 -- frames, variables, watches -- as one strip
 -- across the bottom of the tab, under the explorer, the editor and whatever
 -- else is open. Nothing else about the layout changes. `toggle()` hides the
--- strip and brings it back while the session runs; it goes away by itself
+-- panel and brings it back while the session runs; it goes away by itself
 -- when the session ends.
 --
 -- The variables window has two tabs, Variables and Console (the program's
@@ -11,7 +11,7 @@
 -- and console) is not opened; its console would be a second copy of the
 -- output.
 --
--- Which sessions get the strip, and where their Console comes from, is up to
+-- Which sessions get the Debug panel, and where their Console comes from, is up to
 -- `listen()` (lua/aedi/debug/init.lua); an integration such as
 -- lua/aedi/integrations/intellij_lsp.lua registers its own. Without a
 -- console of its own, a session's Console is the current tab of aedi's Run
@@ -19,7 +19,7 @@
 
 local M = {}
 
---- A debug session is running (the strip may be hidden).
+--- A debug session is running (the Debug panel may be hidden).
 M.on = false
 ---@type integer? the variables window
 M.win = nil
@@ -80,7 +80,7 @@ function M.active()
   return M.on
 end
 
---- Is the strip on screen?
+--- Is the Debug panel on screen?
 function M.visible()
   local layout = layout1()
   return M.on and layout ~= nil and layout:is_open()
@@ -100,7 +100,8 @@ local function render_winbar()
     .. " Variables "
     .. (M.console and on or off)
     .. " Console "
-    .. "%#TabLineFill#"
+    .. "%#TabLineFill#%="
+    .. require("aedi.hints").statusline({ { "Ctrl-Shift-L", "Variables / Console" }, { "Esc", "editor" } })
 end
 
 local function follow_tail()
@@ -184,7 +185,7 @@ end
 
 --- After dap-ui has opened layout 1: give its variables window the Console
 --- tab, and take the run output's own window away -- the output lives in the
---- strip now.
+--- Debug panel now.
 local function attach()
   local output = output_mod()
   local layout = layout1()
@@ -228,7 +229,7 @@ local function attach()
   render_winbar()
 end
 
---- Undo `attach` before the strip closes: the variables window back on its
+--- Undo `attach` before the Debug panel closes: the variables window back on its
 --- own buffer -- closing it while it shows the run output must not take the
 --- output buffer with it -- and the chords off both buffers.
 local function detach()
@@ -243,7 +244,7 @@ local function detach()
   M.win, M.console, M.scopes_buf = nil, false, nil
 end
 
---- The run output's window while the strip is up: the Console tab, so the
+--- The run output's window while the Debug panel is up: the Console tab, so the
 --- plugin opening its panel on a session's first output does not put a second
 --- window across the bottom.
 ---@return integer?
@@ -253,7 +254,7 @@ function M.console_win()
   end
 end
 
---- The strip back to its configured sizes (15 rows; 0.2 / 0.65 / 0.15
+--- The Debug panel back to its configured sizes (15 rows; 0.2 / 0.65 / 0.15
 --- across). dap-ui remembers whatever sizes it had when it was last closed,
 --- and a sidebar re-laid after it opened takes rows back.
 local function fit()
@@ -282,10 +283,10 @@ local function sidebars()
   return set
 end
 
---- The sidebars the strip was laid out under.
+--- The sidebars the Debug panel was laid out under.
 local known = {}
 
---- Open the strip, keeping focus where it was.
+--- Open the Debug panel, keeping focus where it was.
 function M.show()
   if not M.on or M.visible() then
     return
@@ -304,7 +305,7 @@ function M.show()
   end
 end
 
---- Close the strip; the session keeps running.
+--- Close the Debug panel; the session keeps running.
 function M.hide()
   if not M.visible() then
     return
@@ -320,7 +321,7 @@ end
 -- Session
 -- ---------------------------------------------------------------------------
 
---- Autocommands: <Esc> out of dap-ui panes, and the strip laid out again
+--- Autocommands: <Esc> out of dap-ui panes, and the Debug panel laid out again
 --- under a sidebar opened while it is up.
 function M.setup()
   -- <Esc> in any dap-ui pane goes back to the editor, the way it leaves a tool
@@ -334,11 +335,11 @@ function M.setup()
     end,
   })
 
-  -- A sidebar opened while the strip is up is a `topleft` split -- the whole
-  -- height, with the strip squeezed in beside it. Reopening the strip puts it
-  -- back under everything. Only a sidebar the strip has not seen counts: every
+  -- A sidebar opened while the Debug panel is up is a `topleft` split -- the whole
+  -- height, with the Debug panel squeezed in beside it. Reopening the Debug panel puts it
+  -- back under everything. Only a sidebar the Debug panel has not seen counts: every
   -- picker (recent files, go to class) fires this FileType too, and rebuilding
-  -- the strip under one moved focus out of it, which closed it on the spot.
+  -- the Debug panel under one moved focus out of it, which closed it on the spot.
   vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("DebugViewSidebar", { clear = true }),
     pattern = "snacks_picker_list",
@@ -368,7 +369,7 @@ function M.setup()
   })
 end
 
---- A debug session started: the strip comes up, focus stays in the code.
+--- A debug session started: the Debug panel comes up, focus stays in the code.
 ---@param provider? aedi.ConsoleProvider where its Console comes from
 function M.start(provider)
   M.provider = provider or M.panel_console
@@ -380,7 +381,7 @@ function M.start(provider)
   end
 end
 
---- The session ended: the strip goes, the run output comes back as its own
+--- The session ended: the Debug panel goes, the run output comes back as its own
 --- panel, and focus goes to the code.
 function M.stop()
   if not M.on then
@@ -397,7 +398,7 @@ function M.stop()
   M.to_editor()
 end
 
---- `<leader>dv`: hide or show the strip.
+--- `<leader>dv`: hide or show the Debug panel.
 function M.toggle()
   if not M.on then
     vim.notify("No debug session", vim.log.levels.INFO)

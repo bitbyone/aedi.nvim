@@ -1,11 +1,11 @@
--- intellij-lsp.nvim (JetBrains' IntelliJ language server) and the debug
--- strip.
+-- intellij-lsp.nvim (JetBrains' IntelliJ language server) and the Debug
+-- panel.
 --
 --   require("aedi.integrations.intellij_lsp").setup()
 --
 -- after `require("intellij-lsp").setup()`. Its sessions (`intellij_jvm`) get
--- the strip, with the plugin's run output as the Console tab -- and while
--- the strip is up, the plugin opening its own output panel lands in that tab
+-- the Debug panel, with the plugin's run output as the Console tab -- and while
+-- the Debug panel is up, the plugin opening its own output panel lands in that tab
 -- instead of a second log across the bottom. Plain runs and test runs
 -- (`noDebug`) keep the output panel as their whole UI.
 

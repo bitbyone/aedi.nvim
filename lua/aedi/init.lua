@@ -1,4 +1,4 @@
--- aedi.nvim: run configurations, a Run panel and a debug strip, the way
+-- aedi.nvim: run configurations, a Run panel and a Debug panel, the way
 -- IntelliJ IDEA has them.
 --
 --   require("aedi").setup(opts)      see lua/aedi/config.lua for opts
@@ -123,6 +123,7 @@ end
 ---@param opts? aedi.Options
 function M.setup(opts)
   require("aedi.config").set(opts)
+  require("aedi.hints").setup()
   console().setup()
   local cmd = vim.api.nvim_create_user_command
   cmd("AediRun", function(a)

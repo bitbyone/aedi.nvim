@@ -17,7 +17,6 @@ local M = {}
 local FIELDS = { "name", "command", "args", "cwd", "env" }
 
 local HELP = {
-  "# Run configuration. :w saves, <C-CR> saves and runs, q closes.",
   "# command runs through your shell in cwd (relative to the project root);",
   "# args are appended to it; one env: line per variable (KEY=value).",
   "",
@@ -141,6 +140,8 @@ function M.open(c, on_save)
     border = "rounded",
     title = original and (" Edit configuration: " .. original .. " ") or " New run configuration ",
     title_pos = "center",
+    footer = require("aedi.hints").chunks({ { ":w", "save" }, { "Ctrl-Enter", "save and run" }, { "q", "close" } }),
+    footer_pos = "left",
   })
   vim.wo[win].wrap = false
   vim.wo[win].number = false

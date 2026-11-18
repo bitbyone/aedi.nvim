@@ -22,10 +22,10 @@ M.defaults = {
     height = 15,
   },
   debug = {
-    -- The debug strip, dap-ui's gutter cleanup and its framed value popup.
+    -- The Debug panel, dap-ui's gutter cleanup and its framed value popup.
     enabled = true,
   },
-  --- A window aedi draws its own winbar in (the Run panel, the debug strip's
+  --- A window aedi draws its own winbar in (the Run panel, the Debug panel's
   --- variables window). For a tab line plugin that would otherwise repaint
   --- the winbar.
   ---@type fun(win: integer)?

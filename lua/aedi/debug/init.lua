@@ -1,6 +1,6 @@
 -- Debugging: nvim-dap-ui laid out like IntelliJ's Debug tool window.
 --
---   * the debug strip (lua/aedi/debug/view.lua): frames, variables and
+--   * the Debug panel (lua/aedi/debug/view.lua): frames, variables and
 --     watches across the bottom, a Console tab beside Variables
 --   * long values (a record's toString) in a framed, wrapped popup instead
 --     of dap-ui's borderless strip across the next panels
@@ -15,14 +15,14 @@
 --     return vim.tbl_deep_extend("force", opts, { layouts = require("aedi.debug").layouts })
 --   end
 --
--- and say which sessions get the strip:
+-- and say which sessions get the Debug panel:
 --
 --   require("aedi.debug").listen(function(session) return session.config.type == "go" end)
 
 local M = {}
 
---- dap-ui's layouts: 1 is the strip (the debug view needs scopes in it),
---- 2 the REPL and console on the right, which the strip does not open.
+--- dap-ui's layouts: 1 is the Debug panel (lua/aedi/debug/view.lua needs scopes in it),
+--- 2 the REPL and console on the right, which the Debug panel does not open.
 M.layouts = {
   {
     position = "bottom",
@@ -48,7 +48,7 @@ M.layouts = {
 function M.patch_dapui()
   require("aedi.debug.hover").install()
   -- The frames list puts an empty line after every thread, which with the
-  -- JVM's eight or so threads is half the strip spent on nothing. The threads
+  -- JVM's eight or so threads is half the panel spent on nothing. The threads
   -- component is the only place in dap-ui that writes a literal "\n\n", so
   -- shortening exactly that write compacts the list and touches nothing else.
   -- The module exports only `new`; every canvas has the method table as its
@@ -67,7 +67,7 @@ function M.patch_dapui()
   end
 end
 
---- Sessions `match` accepts get the debug strip instead of dap-ui's own
+--- Sessions `match` accepts get the Debug panel instead of dap-ui's own
 --- listeners (every other adapter keeps those). A session with `noDebug`
 --- (a plain run) gets no UI at all. `console` is where its Console comes
 --- from (default: aedi's Run panel).
@@ -106,7 +106,7 @@ function M.listen(match, console)
   end
 end
 
---- Show / hide the strip while a session runs.
+--- Show / hide the Debug panel while a session runs.
 function M.toggle()
   require("aedi.debug.view").toggle()
 end

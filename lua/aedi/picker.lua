@@ -101,7 +101,19 @@ local function snacks_pick()
   end
   Snacks.picker.pick({
     title = "Run",
-    layout = { preset = "select" },
+    layout = {
+      preset = "select",
+      layout = {
+        footer = require("aedi.hints").chunks({
+          { "Enter", "run" },
+          { "Ctrl-E", "edit" },
+          { "Ctrl-N", "new" },
+          { "Ctrl-Y", "copy" },
+          { "Ctrl-X", "delete" },
+        }),
+        footer_pos = "left",
+      },
+    },
     format = function(item)
       local c = item.config
       if c.new then
