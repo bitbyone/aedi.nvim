@@ -118,6 +118,35 @@ working directory by default). Nothing is written into the project.
 - `path:line[:col]` from any tool.
 - Python tracebacks.
 
+### Log colours
+
+Lines in the output are coloured by level, as IntelliJ's Grep Console colours them:
+
+| level | colour |
+| --- | --- |
+| ERROR, FATAL, SEVERE | dark red ground (`AediLogError`) |
+| WARN, WARNING | dark orange ground (`AediLogWarn`) |
+| INFO | none |
+| DEBUG, TRACE | dimmed text (`AediLogDebug`) |
+
+Each rule is a vim regex and a highlight. You can turn a rule off, change it
+or add your own:
+
+```lua
+require("aedi").setup({
+  grep = {
+    warn = false,                                          -- off
+    error = { hl = { bg = "#4a1010" } },                   -- another colour
+    debug = { pattern = [[\v<(DEBUG|TRACE|FINE)>]] },       -- more words
+    sql = { pattern = [[\v<(select|insert)>]], hl = "Special", order = 40 },
+  },
+})
+```
+
+The first rule that matches colours the whole line. Rules are tried by `order`:
+error 10, warn 20, debug 30, others 100 unless set. Only lines on screen are
+checked, so a long log stays fast.
+
 ## Commands and API
 
 | command | Lua | |

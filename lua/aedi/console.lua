@@ -538,6 +538,7 @@ function M.start(c, opts)
   end
   vim.bo[buf].filetype = "aedi-console"
   map(buf, run)
+  require("aedi.grep").attach(buf)
   -- A key pressed in terminal mode after the process ended wipes the buffer
   -- (Neovim's own behaviour); the tab goes with it.
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -590,6 +591,7 @@ function M.external(spec)
   if run.buf ~= spec.buf then
     run.buf = spec.buf
     map(spec.buf, run)
+    require("aedi.grep").attach(spec.buf)
     -- Follow the end of the output while the cursor is on the last line, as
     -- a terminal tab does (its producer follows only its own window).
     vim.api.nvim_buf_attach(spec.buf, false, {

@@ -21,6 +21,11 @@ M.defaults = {
     -- Rows of the Run panel across the bottom.
     height = 15,
   },
+  -- Log lines coloured by level (lua/aedi/grep.lua): ERROR, WARN and DEBUG
+  -- by default. `name = false` turns one off, a table overrides or adds one:
+  -- { pattern = <vim regex>, hl = <group or nvim_set_hl attributes>, order = n }
+  ---@type table<string, aedi.GrepRule|false>
+  grep = {},
   debug = {
     -- The Debug panel, dap-ui's gutter cleanup and its framed value popup.
     enabled = true,

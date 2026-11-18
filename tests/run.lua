@@ -239,6 +239,22 @@ test("console: an external tab", function()
   console.hide()
 end)
 
+test("grep: levels, overrides, off", function()
+  local grep = require("aedi.grep")
+  local function marks(lines)
+    return vim.tbl_map(function(l)
+      return grep.match(l) or "-"
+    end, lines)
+  end
+  local lines = { "2026 ERROR boom", "2026  WARN careful", "2026 INFO fine", "2026 DEBUG noise", "WARNINGS nope", "select 1" }
+  eq(marks(lines), { "AediLogError", "AediLogWarn", "-", "AediLogDebug", "-", "-" })
+  require("aedi.config").options.grep = { warn = false, sql = { pattern = [[\v<select>]], hl = { bg = "#102030" } } }
+  grep.configure()
+  eq(marks(lines), { "AediLogError", "-", "-", "AediLogDebug", "-", "AediGrep_sql" })
+  require("aedi.config").options.grep = {}
+  grep.configure()
+end)
+
 vim.fn.delete(tmp, "rf")
 print(("%d passed, %d failed"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)
