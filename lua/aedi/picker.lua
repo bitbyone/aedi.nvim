@@ -69,9 +69,48 @@ local function delete(c)
   return false
 end
 
+--- The Run list on a plain float's ground, darker than snacks' pickers: it
+--- has no backdrop, and the configuration form (which has) is the lighter
+--- one. Every SnacksPicker* group its windows use is swapped for a copy on
+--- NormalFloat's ground (FloatBorder's for borders and titles).
+local function get(name)
+  local ok, h = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+  return ok and h or {}
+end
+
+--- `grounds` are taken before the picker opens: while it is up, snacks
+--- shows NormalFloat / FloatBorder in its own colours.
+local function darken(picker, grounds)
+  local body, edge = grounds.body, grounds.edge
+  local function dark(group)
+    local name = "AediDark_" .. group
+    local h = get(group)
+    local bg = (group:find("Border") or group:find("Title")) and edge or body
+    vim.api.nvim_set_hl(0, name, { fg = h.fg, bg = bg, bold = h.bold, italic = h.italic })
+    return name
+  end
+  local wins = {}
+  for _, w in pairs(picker.layout.wins or {}) do
+    wins[#wins + 1] = w.win
+  end
+  for _, w in pairs(picker.layout.box_wins or {}) do
+    wins[#wins + 1] = w.win
+  end
+  for _, win in ipairs(wins) do
+    if win and vim.api.nvim_win_is_valid(win) then
+      local pairs_ = {}
+      for from, to in vim.wo[win].winhighlight:gmatch("([^:,]+):([^,]+)") do
+        pairs_[#pairs_ + 1] = from .. ":" .. (to:find("^Snacks") and dark(to) or to)
+      end
+      vim.wo[win].winhighlight = table.concat(pairs_, ",")
+    end
+  end
+end
+
 ---@param opts? { debug?: boolean }
 local function snacks_pick(opts)
   local debug = opts and opts.debug
+  local grounds = { body = get("NormalFloat").bg or get("Normal").bg, edge = get("FloatBorder").bg }
   local console = require("aedi.console")
   local width = { name = 0, type = 0, profiles = 0 }
   local function make_items()
@@ -100,6 +139,9 @@ local function snacks_pick(opts)
   end
   Snacks.picker.pick({
     title = debug and "Debug" or "Run",
+    on_show = function(picker)
+      darken(picker, grounds)
+    end,
     layout = {
       preset = "select",
       layout = {
@@ -111,7 +153,7 @@ local function snacks_pick(opts)
           { "Ctrl-N", "new" },
           { "Ctrl-Y", "copy" },
           { "Ctrl-X", "delete" },
-        }, "picker"),
+        }, "float"),
         footer_pos = "left",
       },
     },

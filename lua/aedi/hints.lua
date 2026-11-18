@@ -27,6 +27,7 @@ end
 --- Where hints sit, and the groups their background comes from.
 local PLACES = {
   float = { "FloatBorder", "NormalFloat", "Normal" },
+  form = { "AediFormBorder", "FloatBorder", "NormalFloat", "Normal" },
   picker = { "SnacksPickerBorder", "FloatBorder", "NormalFloat", "Normal" },
   bar = { "AediTabFill", "TabLineFill", "WinBar", "Normal" },
 }
@@ -51,7 +52,7 @@ end
 
 --- `{ text, hl }` chunks, for a float's title or footer.
 ---@param hint aedi.Hint
----@param place? "float"|"picker"|"bar"
+---@param place? "float"|"form"|"picker"|"bar"
 ---@return { [1]: string, [2]: string }[]
 function M.chunks(hint, place)
   place = place or "float"
@@ -71,7 +72,7 @@ end
 
 --- The same as a 'statusline' / 'winbar' string.
 ---@param hint aedi.Hint
----@param place? "float"|"picker"|"bar"
+---@param place? "float"|"form"|"picker"|"bar"
 ---@return string
 function M.statusline(hint, place)
   local parts = {}

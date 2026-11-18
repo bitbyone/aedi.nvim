@@ -460,7 +460,7 @@ function M.open(c, on_save)
     row = math.floor(vim.o.lines * 0.25),
     col = math.floor((vim.o.columns - width) / 2),
     border = "rounded",
-    title = { { " " .. title .. " ", "FloatTitle" } },
+    title = { { " " .. title .. " ", "AediFormTitle" } },
     title_pos = "left",
     footer = hints.chunks({
       { "Tab", "next" },
@@ -469,7 +469,7 @@ function M.open(c, on_save)
       { "Ctrl-Enter", "save and run" },
       { "Ctrl-D", "save and debug" },
       { "q", "close" },
-    }),
+    }, "form"),
     footer_pos = "left",
   })
   local win = state.win
@@ -484,7 +484,14 @@ function M.open(c, on_save)
   wo.list = false
   wo.spell = false
   wo.cursorline = true
-  wo.winhighlight = "CursorLine:AediFormCursorLine"
+  wo.winhighlight = table.concat({
+    "Normal:AediForm",
+    "NormalFloat:AediForm",
+    "FloatBorder:AediFormBorder",
+    "FloatTitle:AediFormTitle",
+    "FloatFooter:AediFormBorder",
+    "CursorLine:AediFormCursorLine",
+  }, ",")
   vim.bo[buf].filetype = "aedi-configuration"
   render(state)
   vim.bo[buf].modified = false
@@ -503,7 +510,7 @@ function M.open(c, on_save)
     state.original = parsed.name
     vim.bo[buf].modified = false
     vim.api.nvim_win_set_config(win, {
-      title = { { " Run configuration · " .. parsed.name .. " ", "FloatTitle" } },
+      title = { { " Run configuration · " .. parsed.name .. " ", "AediFormTitle" } },
       title_pos = "left",
     })
     vim.notify("Saved run configuration " .. parsed.name, vim.log.levels.INFO)
@@ -636,6 +643,22 @@ function M.setup()
     set(0, "AediFormError", { link = "DiagnosticError", default = true })
     set(0, "AediFormValue", { bold = true, default = true })
     set(0, "AediFormCursorLine", { link = "CursorLine", default = true })
+    -- The form stands out from the dimmed editor: a lighter ground than a
+    -- plain float, its border on the same ground (snacks' pickers' look).
+    local function lighter(c, by)
+      if not c then
+        return nil
+      end
+      local r, g, b = math.floor(c / 65536) % 256, math.floor(c / 256) % 256, c % 256
+      local function up(x)
+        return math.min(255, x + by)
+      end
+      return up(r) * 65536 + up(g) * 256 + up(b)
+    end
+    local ground = hl("SnacksPicker").bg or lighter(hl("NormalFloat").bg or hl("Normal").bg, 6)
+    set(0, "AediForm", { fg = hl("NormalFloat").fg or hl("Normal").fg, bg = ground, default = true })
+    set(0, "AediFormBorder", { fg = hl("FloatBorder").fg, bg = ground, default = true })
+    set(0, "AediFormTitle", { fg = accent, bg = ground, default = true })
   end
   define()
   vim.api.nvim_create_autocmd("ColorScheme", {
