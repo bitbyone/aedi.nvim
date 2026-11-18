@@ -473,6 +473,7 @@ function M.open(c, on_save)
     footer_pos = "left",
   })
   local win = state.win
+  util.backdrop(win)
   local wo = vim.wo[win]
   wo.wrap = false
   wo.number = false

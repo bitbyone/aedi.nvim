@@ -64,4 +64,52 @@ function M.bare(win)
   wo.list = false
 end
 
+--- Dim everything under a dialog, as snacks' pickers do: a float over the
+--- whole editor, black at 60% blend, just below `zindex`. Closes with
+--- `win`. Nothing when colours are not true colour.
+---@param win integer the dialog
+---@param zindex? integer the dialog's zindex (default 50)
+function M.backdrop(win, zindex)
+  if not vim.o.termguicolors then
+    return
+  end
+  vim.api.nvim_set_hl(0, "AediBackdrop", { bg = "#000000", default = true })
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "wipe"
+  local drop = vim.api.nvim_open_win(buf, false, {
+    relative = "editor",
+    row = 0,
+    col = 0,
+    width = vim.o.columns,
+    height = vim.o.lines,
+    style = "minimal",
+    border = "none",
+    focusable = false,
+    noautocmd = true,
+    zindex = (zindex or 50) - 1,
+  })
+  vim.wo[drop].winhighlight = "Normal:AediBackdrop"
+  vim.wo[drop].winblend = 60
+  local group = vim.api.nvim_create_augroup("aedi_backdrop_" .. drop, { clear = true })
+  local function close()
+    pcall(vim.api.nvim_del_augroup_by_id, group)
+    if vim.api.nvim_win_is_valid(drop) then
+      vim.api.nvim_win_close(drop, true)
+    end
+  end
+  vim.api.nvim_create_autocmd("WinClosed", {
+    group = group,
+    pattern = tostring(win),
+    callback = close,
+  })
+  vim.api.nvim_create_autocmd("VimResized", {
+    group = group,
+    callback = function()
+      if vim.api.nvim_win_is_valid(drop) then
+        vim.api.nvim_win_set_config(drop, { relative = "editor", row = 0, col = 0, width = vim.o.columns, height = vim.o.lines })
+      end
+    end,
+  })
+end
+
 return M
