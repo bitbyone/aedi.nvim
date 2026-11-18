@@ -36,35 +36,50 @@ gives the picker its actions; without it, `vim.ui.select` is used.
 
 ## Run configurations
 
-`:AediRun` (or `require("aedi").pick()`) lists the configurations. Saved ones
-come first, starting with the one you ran last, then the ones found in the
-project:
+`:AediRun` (or `require("aedi").pick()`) lists the saved configurations
+together with the ones found in the project. The ones you run most, and
+most recently, come first (frecency).
 
 | key | |
 | --- | --- |
-| `<CR>` | run |
-| `<C-e>` | edit; a found configuration is saved as a copy of your own |
-| `<C-n>` | new |
-| `<C-y>` | duplicate |
-| `<C-x>` | delete |
+| `Enter` | run |
+| `Ctrl-E` | edit; a found configuration is saved as a copy of your own |
+| `Ctrl-N` | new |
+| `Ctrl-Y` | duplicate |
+| `Ctrl-X` | delete |
 
-Editing opens a form, which is a plain buffer edited like any text:
+There are three types:
+
+| type | fields | runs |
+| --- | --- | --- |
+| **Spring Boot** | module, profiles, arguments, environment | `./gradlew [:module:]bootRun --args='--spring.profiles.active=local …'` or `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` |
+| **Gradle** | tasks, arguments, environment | `./gradlew <tasks> <arguments>` |
+| **Shell command** | command, arguments, directory, environment | the command, through `'shell'` |
+
+Spring Boot applications are found by their `@SpringBootApplication` under
+`src/main`, one configuration each. Their profiles come from
+`application-<profile>.yml|yaml|properties` and from `on-profile:` documents.
+
+The form is a float, laid out like this:
 
 ```
-name:    API server
-command: go run ./cmd/server
-args:    --port 8080
-cwd:     services/api
-env:     LOG_LEVEL=debug
-env:     PORT=8080
+╭ Run configuration · access-control ─────────────────────────────────╮
+│  TYPE          Spring Boot                             Enter change │
+│  NAME          access-control                                       │
+│  PROFILES      local                    local · openapi  Enter pick │
+│  ARGUMENTS     none (program arguments, e.g. --server.port=8081)    │
+│  ENVIRONMENT   KEY=value KEY2='with space'                          │
+│                                                                     │
+│  RUNS          ./gradlew bootRun --args='--spring.profiles.active=local'
+│                in ~/workspace/my2n/access-control                   │
+╰ Tab next · Enter pick · :w save · Ctrl-Enter save and run · q close ╯
 ```
 
-- `command` runs through `'shell'`, so pipes, `&&` and `$VARS` work.
-- `args` is appended to `command`.
-- `cwd` is relative to the project root.
-- Each `env:` line sets one variable.
-
-`:w` saves, `<C-CR>` saves and runs, and `q` closes.
+- Each value is one line of text, edited like any text.
+- `Enter` on Type, Profiles or Module offers their choices; profiles are
+  ticked in a list.
+- `RUNS` follows as you type, so it always shows how the profile gets
+  activated.
 
 Configurations are stored per project in
 `stdpath("data")/aedi/configurations.json`, keyed by the project root (the
@@ -75,11 +90,11 @@ working directory by default). Nothing is written into the project.
 | key (normal mode) | |
 | --- | --- |
 | `r` | rerun |
-| `<C-c>` | stop (sends Ctrl-C; press again to kill) |
-| `x` | close the tab |
+| `Ctrl-C` | stop (sends Ctrl-C; press again to kill) |
+| `x` | close the tab; it stops the process if it is still running |
 | `e` | edit the configuration, or save an ad-hoc command as one |
-| `<CR>` | open the file or stack frame under the cursor |
-| `<Tab>` / `<S-Tab>` | next / previous tab |
+| `Enter` | go to the file or stack frame under the cursor |
+| `Tab` / `Shift-Tab` | next / previous tab |
 | `q` | hide the panel |
 | `<Esc>` | go back to the editor |
 | `i` | type into the program |

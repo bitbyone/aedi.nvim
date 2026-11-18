@@ -9,46 +9,37 @@ local M = {}
 
 local NEW = { name = "New configuration…", new = true }
 
---- Saved configurations (the one run last first), then detected ones whose
---- name is not taken.
+--- Saved configurations and the ones found in the project (a saved one
+--- shadows a found one of the same name), the most used first: runs,
+--- weighted by how recent (frecency). Ties keep saved before found.
 ---@return aedi.Configuration[]
 function M.items()
   local store = require("aedi.store")
-  local saved = store.list()
-  local last = store.last()
-  local out, seen = {}, {}
-  if last then
-    for i, c in ipairs(saved) do
-      if c.name == last.name then
-        table.remove(saved, i)
-        table.insert(saved, 1, c)
-        break
-      end
-    end
-  end
-  for _, c in ipairs(saved) do
+  local list, seen = {}, {}
+  for _, c in ipairs(store.list()) do
     seen[c.name] = true
-    out[#out + 1] = c
+    list[#list + 1] = c
   end
   if require("aedi.config").options.detect then
-    local found = require("aedi.detect").all(require("aedi.util").root())
-    -- the detected one run last goes first among them
-    if last and last.detected then
-      for i, c in ipairs(found) do
-        if c.name == last.name then
-          table.remove(found, i)
-          table.insert(found, 1, c)
-          break
-        end
-      end
-    end
-    for _, c in ipairs(found) do
+    for _, c in ipairs(require("aedi.detect").all(require("aedi.util").root())) do
       if not seen[c.name] then
-        out[#out + 1] = c
+        list[#list + 1] = c
       end
     end
   end
-  return out
+  local now = os.time()
+  local score, order = {}, {}
+  for i, c in ipairs(list) do
+    score[c] = store.score(c.name, nil, now)
+    order[c] = i
+  end
+  table.sort(list, function(x, y)
+    if score[x] ~= score[y] then
+      return score[x] > score[y]
+    end
+    return order[x] < order[y]
+  end)
+  return list
 end
 
 local function run(c)
@@ -80,10 +71,16 @@ end
 
 local function snacks_pick()
   local console = require("aedi.console")
+  local width = { name = 0, type = 0, profiles = 0 }
   local function make_items()
     local items = {}
+    local types = require("aedi.types")
     for _, c in ipairs(M.items()) do
-      items[#items + 1] = { text = c.name .. " " .. c.command, config = c }
+      width.name = math.max(width.name, vim.fn.strdisplaywidth(c.name))
+      width.type = math.max(width.type, #types.label(c))
+      width.profiles = math.max(width.profiles, #(c.profiles or ""))
+      local text = table.concat({ c.name, types.label(c), c.profiles or "" }, " ")
+      items[#items + 1] = { text = text, config = c }
     end
     items[#items + 1] = { text = NEW.name, config = NEW }
     return items
@@ -104,35 +101,41 @@ local function snacks_pick()
     layout = {
       preset = "select",
       layout = {
+        title_pos = "left",
         footer = require("aedi.hints").chunks({
           { "Enter", "run" },
           { "Ctrl-E", "edit" },
           { "Ctrl-N", "new" },
           { "Ctrl-Y", "copy" },
           { "Ctrl-X", "delete" },
-        }),
+        }, "picker"),
         footer_pos = "left",
       },
     },
     format = function(item)
       local c = item.config
       if c.new then
-        return { { "＋ ", "Special" }, { c.name, "Special" } }
+        return { { "  + ", "AediFormKey" }, { c.name, "AediFormKey" } }
       end
-      local ret = {}
       local running = false
       for _, r in ipairs(console.runs) do
         if r.config.name == c.name and console.running(r) then
           running = true
         end
       end
+      local types = require("aedi.types")
+      local ret = {}
       ret[#ret + 1] = { running and "● " or "  ", "AediRunning" }
-      ret[#ret + 1] = { c.name, c.detected and "SnacksPickerComment" or "SnacksPickerFile" }
+      ret[#ret + 1] = { ("%-" .. width.name .. "s"):format(c.name), "SnacksPickerFile" }
       ret[#ret + 1] = { "  " }
-      ret[#ret + 1] = { console.command_line(c), "SnacksPickerComment" }
-      if c.cwd and c.cwd ~= "." then
-        ret[#ret + 1] = { "  in " .. c.cwd, "SnacksPickerDir" }
+      ret[#ret + 1] = { ("%-" .. width.type .. "s"):format(types.label(c)), "AediFormMuted" }
+      ret[#ret + 1] = { "  " }
+      local profiles = c.profiles and c.profiles ~= "" and c.profiles or ""
+      ret[#ret + 1] = { ("%-" .. width.profiles .. "s"):format(profiles), "AediFormKey" }
+      if width.profiles > 0 then
+        ret[#ret + 1] = { "  " }
       end
+      ret[#ret + 1] = { c.detected and "found in the project" or "", "AediFormPlaceholder" }
       return ret
     end,
     confirm = act(function(c)
@@ -186,7 +189,7 @@ function M.pick()
   vim.ui.select(items, {
     prompt = "Run",
     format_item = function(c)
-      return c.new and c.name or (c.name .. "  " .. require("aedi.console").command_line(c))
+      return c.new and c.name or (c.name .. "  " .. require("aedi.types").label(c))
     end,
   }, function(c)
     if c and c.new then

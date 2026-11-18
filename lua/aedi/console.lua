@@ -396,36 +396,16 @@ function M.follow_link(run)
   vim.notify("Not found: " .. (loc.file or (loc.frame and loc.frame.file) or "?"), vim.log.levels.WARN)
 end
 
---- The shell command line of `c`.
----@param c aedi.Configuration
-function M.command_line(c)
-  local cmd = c.command
-  if c.args and c.args ~= "" then
-    cmd = cmd .. " " .. c.args
-  end
-  return cmd
-end
-
----@param c aedi.Configuration
----@return string
-function M.cwd_of(c)
-  local root = util.root()
-  local cwd = c.cwd
-  if not cwd or cwd == "" or cwd == "." then
-    return root
-  end
-  cwd = vim.fn.expand(cwd)
-  if cwd:sub(1, 1) ~= "/" then
-    cwd = root .. "/" .. cwd
-  end
-  return vim.fs.normalize(cwd)
-end
-
 --- Run `c` in its tab (a new one, or the one it ran in before).
 ---@param c aedi.Configuration
 ---@return aedi.Run?
 function M.start(c)
-  local cwd = M.cwd_of(c)
+  local launch, err = require("aedi.types").build(c, util.root())
+  if not launch then
+    vim.notify(("Cannot run %s: %s"):format(c.name, err), vim.log.levels.ERROR)
+    return
+  end
+  local cwd = launch.cwd
   if not vim.uv.fs_stat(cwd) then
     vim.notify(("Working directory does not exist: %s"):format(cwd), vim.log.levels.ERROR)
     return
@@ -456,14 +436,14 @@ function M.start(c)
   M.current = slot
   M.show()
 
-  local line = M.command_line(c)
+  local line = launch.cmd
   -- The command first, dimmed, as IntelliJ prints the command line it ran.
   local header = ("printf '\\033[2m%%s\\033[0m\\n' %s; "):format(vim.fn.shellescape("$ " .. line))
   vim.api.nvim_win_call(M.win, function()
     run.job = vim.fn.jobstart({ vim.o.shell, "-c", header .. line }, {
       term = true,
       cwd = cwd,
-      env = c.env,
+      env = launch.env,
       on_exit = function(_, code)
         run.code = code
         run.ended = vim.uv.now()

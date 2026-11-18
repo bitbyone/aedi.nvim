@@ -124,6 +124,7 @@ end
 function M.setup(opts)
   require("aedi.config").set(opts)
   require("aedi.hints").setup()
+  require("aedi.editor").setup()
   console().setup()
   local cmd = vim.api.nvim_create_user_command
   cmd("AediRun", function(a)

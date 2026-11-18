@@ -50,25 +50,42 @@ local function gradle(root)
   if not cmd then
     return {}
   end
+  local function task(name, tasks, kind)
+    return { name = name, type = "gradle", tasks = tasks, kind = kind, detected = true }
+  end
   if tool == "maven" then
     return {
-      cfg("mvn test", cmd .. " test", "test"),
-      cfg("mvn package", cmd .. " package", "build"),
+      task("mvn test", "test", "test"),
+      task("mvn package", "package", "build"),
     }
   end
-  local build = (read(root .. "/build.gradle.kts") or read(root .. "/build.gradle") or "")
-  local out = {}
-  if build:find("org.springframework.boot", 1, true) then
-    out[#out + 1] = cfg("gradle bootRun", cmd .. " bootRun", "run")
-  end
-  vim.list_extend(out, {
-    cfg("gradle run", cmd .. " run", "run"),
-    cfg("gradle test", cmd .. " test", "test"),
-    cfg("gradle build", cmd .. " build", "build"),
+  return {
+    task("gradle run", "run", "run"),
+    task("gradle test", "test", "test"),
+    task("gradle build", "build", "build"),
     -- Suspends the JVM on port 5005 until a debugger attaches.
-    cfg("gradle run --debug-jvm", cmd .. " run --debug-jvm"),
-    cfg("gradle test --debug-jvm", cmd .. " test --debug-jvm"),
-  })
+    task("gradle run --debug-jvm", "run --debug-jvm"),
+    task("gradle test --debug-jvm", "test --debug-jvm"),
+  }
+end
+
+--- A Spring Boot configuration per application in the project.
+local function spring_boot(root)
+  if not M.build_tool(root) then
+    return {}
+  end
+  local apps = require("aedi.spring").apps(root)
+  local out = {}
+  for _, dir in ipairs(apps) do
+    local name = dir == "" and vim.fs.basename(root) or vim.fs.basename(dir)
+    out[#out + 1] = {
+      name = name,
+      type = "spring-boot",
+      module = dir ~= "" and dir or nil,
+      kind = "run",
+      detected = true,
+    }
+  end
   return out
 end
 
@@ -161,7 +178,7 @@ local function make(root)
   return out
 end
 
-M.builtin = { gradle, go, cargo, node, make }
+M.builtin = { spring_boot, gradle, go, cargo, node, make }
 
 --- Everything the detectors find in `root`.
 ---@param root string

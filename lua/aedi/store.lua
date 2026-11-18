@@ -16,6 +16,10 @@
 ---@field env? table<string, string>
 ---@field detected? boolean found in the project, not saved
 ---@field kind? "run"|"test"|"build"
+---@field type? "shell"|"spring-boot"|"gradle" (nil: shell)
+---@field profiles? string Spring profiles, "a,b"
+---@field module? string the Spring Boot application's directory
+---@field tasks? string Gradle tasks
 
 local M = {}
 
@@ -72,6 +76,10 @@ end
 local function clean(c)
   local out = {
     name = c.name,
+    type = (c.type and c.type ~= "shell") and c.type or nil,
+    profiles = (c.profiles and c.profiles ~= "") and c.profiles or nil,
+    module = (c.module and c.module ~= "") and c.module or nil,
+    tasks = (c.tasks and c.tasks ~= "") and c.tasks or nil,
     command = c.command,
     args = (c.args and c.args ~= "") and c.args or nil,
     cwd = (c.cwd and c.cwd ~= "" and c.cwd ~= ".") and c.cwd or nil,
@@ -118,9 +126,16 @@ function M.put(c, old, root)
   else
     list[#list + 1] = clean(c)
   end
+  if old and old ~= c.name and p.stats and p.stats[old] then
+    p.stats[c.name], p.stats[old] = p.stats[old], nil
+  end
   -- Rerun runs what was edited, not the copy taken when it last ran.
   if p.last == (old or c.name) then
     p.last = c.name
+  p.stats = p.stats or {}
+  local s = p.stats[c.name] or { count = 0 }
+  s.count, s.at = s.count + 1, os.time()
+  p.stats[c.name] = s
     p.last_config = clean(c)
   end
   save()
@@ -135,6 +150,9 @@ function M.delete(name, root)
   end, p.configurations)
   if p.last == name then
     p.last, p.last_config = nil, nil
+  end
+  if p.stats then
+    p.stats[name] = nil
   end
   save()
 end
@@ -151,8 +169,28 @@ end
 function M.set_last(c, root)
   local p = project(root)
   p.last = c.name
+  p.stats = p.stats or {}
+  local s = p.stats[c.name] or { count = 0 }
+  s.count, s.at = s.count + 1, os.time()
+  p.stats[c.name] = s
   p.last_config = vim.tbl_extend("force", clean(c), { detected = c.detected, kind = c.kind })
   save()
+end
+
+--- How much `name` is used: runs, weighted by how recent the last one was
+--- (frecency). 0 for one never run.
+---@param name string
+---@param root? string
+---@param now? integer
+---@return number
+function M.score(name, root, now)
+  local s = (project(root).stats or {})[name]
+  if not s then
+    return 0
+  end
+  local age = (now or os.time()) - (s.at or 0)
+  local weight = age < 3600 and 8 or age < 86400 and 4 or age < 7 * 86400 and 2 or age < 30 * 86400 and 1 or 0.5
+  return s.count * weight
 end
 
 return M
