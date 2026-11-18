@@ -100,14 +100,14 @@ end)
 test("build: spring boot on gradle and maven, shell, gradle", function()
   local g = tmp .. "/sb-gradle"
   write(g .. "/gradlew", "")
-  local l = assert(types.build({ name = "a", type = "spring-boot", profiles = "local, dev", args = "--server.port=1" }, g))
+  local l = assert(types.build({ name = "a", type = "spring-boot", launcher = "bootRun", profiles = "local, dev", args = "--server.port=1" }, g))
   eq(l.cmd, "./gradlew bootRun --args='--spring.profiles.active=local,dev --server.port=1'")
   eq(l.cwd, g)
-  eq(types.build({ name = "a", type = "spring-boot", module = "svc/api" }, g).cmd, "./gradlew :svc:api:bootRun")
+  eq(types.build({ name = "a", type = "spring-boot", launcher = "bootRun", module = "svc/api" }, g).cmd, "./gradlew :svc:api:bootRun")
   local m = tmp .. "/sb-maven"
   write(m .. "/mvnw", "")
   eq(
-    types.build({ name = "a", type = "spring-boot", profiles = "local", module = "api" }, m).cmd,
+    types.build({ name = "a", type = "spring-boot", launcher = "bootRun", profiles = "local", module = "api" }, m).cmd,
     "./mvnw spring-boot:run -pl api -Dspring-boot.run.profiles=local"
   )
   eq(types.build({ name = "t", type = "gradle", tasks = "test", args = "--info" }, g).cmd, "./gradlew test --info")
@@ -115,6 +115,31 @@ test("build: spring boot on gradle and maven, shell, gradle", function()
   eq({ s.cmd, s.cwd }, { "go run . a", "/r/sub" })
   local _, err = types.build({ name = "x", type = "gradle", tasks = "test" }, tmp .. "/nothing")
   assert(err and err:find("no gradlew"), err)
+end)
+test("split args", function()
+  eq(types.split_args([[-Xmx1g "-Dx=a b" 'c d' '']]), { "-Xmx1g", "-Dx=a b", "c d", "" })
+end)
+test("build: through the IntelliJ server", function()
+  if vim.fn.executable("rg") ~= 1 then
+    return
+  end
+  local root = tmp .. "/ij"
+  write(root .. "/gradlew", "")
+  write(root .. "/app/src/main/kotlin/x/App.kt", "package x.y\n\n@SpringBootApplication\nclass App\n\nfun main(args: Array<String>) {}\n")
+  write(root .. "/tool/src/main/java/t/Tool.java", "package t;\nclass Tool { public static void main(String[] a) {} }\n")
+  local jvm = require("aedi.jvm")
+  eq(vim.tbl_map(function(m)
+    return m.class
+  end, jvm.mains(root)), { "t.Tool", "x.y.AppKt" })
+  local l = assert(types.build({ name = "s", type = "spring-boot", module = "app", profiles = "local", vm = "-Xmx1g" }, root))
+  eq(l.intellij.mainClass, "x.y.AppKt")
+  eq(l.intellij.args, { "--spring.profiles.active=local" })
+  eq(l.intellij.vmArgs, { "-Xmx1g" })
+  eq(l.cmd, "java -Xmx1g x.y.AppKt --spring.profiles.active=local")
+  local a = assert(types.build({ name = "t", type = "application", main = "t.Tool", args = "a 'b c'" }, root))
+  eq({ a.intellij.mainClass, a.intellij.args }, { "t.Tool", { "a", "b c" } })
+  assert(types.debuggable({ type = "application" }))
+  assert(not types.debuggable({ type = "spring-boot", launcher = "bootRun" }))
 end)
 test("spring: apps and profiles", function()
   local root = tmp .. "/sb"

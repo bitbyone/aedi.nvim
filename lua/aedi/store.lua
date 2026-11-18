@@ -20,6 +20,9 @@
 ---@field profiles? string Spring profiles, "a,b"
 ---@field module? string the Spring Boot application's directory
 ---@field tasks? string Gradle tasks
+---@field launcher? "intellij"|"bootRun" how a Spring Boot one runs (nil: intellij)
+---@field main? string an Application's main class
+---@field vm? string VM options
 
 local M = {}
 
@@ -80,6 +83,9 @@ local function clean(c)
     profiles = (c.profiles and c.profiles ~= "") and c.profiles or nil,
     module = (c.module and c.module ~= "") and c.module or nil,
     tasks = (c.tasks and c.tasks ~= "") and c.tasks or nil,
+    launcher = (c.launcher and c.launcher ~= "" and c.launcher ~= "intellij") and c.launcher or nil,
+    main = (c.main and c.main ~= "") and c.main or nil,
+    vm = (c.vm and c.vm ~= "") and c.vm or nil,
     command = c.command,
     args = (c.args and c.args ~= "") and c.args or nil,
     cwd = (c.cwd and c.cwd ~= "" and c.cwd ~= ".") and c.cwd or nil,

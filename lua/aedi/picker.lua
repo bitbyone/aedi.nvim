@@ -42,8 +42,8 @@ function M.items()
   return list
 end
 
-local function run(c)
-  require("aedi.console").start(c)
+local function run(c, debug)
+  require("aedi.console").start(c, { debug = debug })
 end
 
 local function edit(c)
@@ -69,7 +69,9 @@ local function delete(c)
   return false
 end
 
-local function snacks_pick()
+---@param opts? { debug?: boolean }
+local function snacks_pick(opts)
+  local debug = opts and opts.debug
   local console = require("aedi.console")
   local width = { name = 0, type = 0, profiles = 0 }
   local function make_items()
@@ -97,13 +99,14 @@ local function snacks_pick()
     end
   end
   Snacks.picker.pick({
-    title = "Run",
+    title = debug and "Debug" or "Run",
     layout = {
       preset = "select",
       layout = {
         title_pos = "left",
         footer = require("aedi.hints").chunks({
-          { "Enter", "run" },
+          { "Enter", debug and "debug" or "run" },
+          { "Ctrl-D", "debug" },
           { "Ctrl-E", "edit" },
           { "Ctrl-N", "new" },
           { "Ctrl-Y", "copy" },
@@ -142,10 +145,15 @@ local function snacks_pick()
       if c.new then
         edit(nil)
       else
-        run(c)
+        run(c, debug)
       end
     end),
     actions = {
+      aedi_debug = act(function(c)
+        if not c.new then
+          run(c, true)
+        end
+      end),
       aedi_edit = act(function(c)
         edit(not c.new and c or nil)
       end),
@@ -169,6 +177,7 @@ local function snacks_pick()
     win = {
       input = {
         keys = {
+          ["<c-d>"] = { "aedi_debug", mode = { "n", "i" } },
           ["<c-e>"] = { "aedi_edit", mode = { "n", "i" } },
           ["<c-n>"] = { "aedi_new", mode = { "n", "i" } },
           ["<c-y>"] = { "aedi_duplicate", mode = { "n", "i" } },
@@ -179,10 +188,11 @@ local function snacks_pick()
   })
 end
 
---- Pick a configuration and run it.
-function M.pick()
+--- Pick a configuration and run it (`debug`: debug it).
+---@param opts? { debug?: boolean }
+function M.pick(opts)
   if rawget(_G, "Snacks") and Snacks.picker then
-    return snacks_pick()
+    return snacks_pick(opts)
   end
   local items = M.items()
   items[#items + 1] = NEW
@@ -195,7 +205,7 @@ function M.pick()
     if c and c.new then
       edit(nil)
     elseif c then
-      run(c)
+      run(c, opts and opts.debug)
     end
   end)
 end

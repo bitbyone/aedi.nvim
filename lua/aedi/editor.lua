@@ -33,8 +33,11 @@ local LABEL_W = 14
 ---@return string[]
 local function fields_of(state)
   local out = { "type" }
-  for _, f in ipairs(types.types[state.type].fields) do
-    if f ~= "module" or #state.apps > 1 or (state.values.module or "") ~= "" then
+  local t = types.types[state.type]
+  for _, f in ipairs(t.fields) do
+    local skip = (f == "module" and #state.apps <= 1 and (state.values.module or "") == "")
+      or (t.hidden and t.hidden(f, state.values))
+    if not skip then
       out[#out + 1] = f
     end
   end
@@ -56,6 +59,8 @@ local function to_config(state)
           return nil, err
         end
         c.env = next(env) and env or nil
+      elseif f == "launcher" then
+        c.launcher = value == "bootRun" and "bootRun" or nil
       elseif f == "profiles" then
         c.profiles = spring.normalize(value) ~= "" and spring.normalize(value) or nil
       elseif value ~= "" then
@@ -72,9 +77,32 @@ local function to_config(state)
   if state.type == "gradle" and not c.tasks then
     return nil, "no tasks"
   end
+  if state.type == "application" and not c.main then
+    return nil, "no main class"
+  end
   return c
 end
 M.to_config = to_config
+
+--- Fields whose line shows a choice's label rather than text you type.
+local CHOICE = { type = true, launcher = true }
+
+local function launcher_label(id)
+  for _, l in ipairs(types.launchers) do
+    if l.id == id then
+      return l.label
+    end
+  end
+  return types.launchers[1].label
+end
+
+--- The text a choice field's line holds.
+local function choice_text(state, f)
+  if f == "type" then
+    return types.types[state.type].label
+  end
+  return launcher_label(state.values.launcher)
+end
 
 --- Values of the form's fields, from a configuration.
 ---@param c aedi.Configuration
@@ -88,6 +116,9 @@ local function values_of(c)
     profiles = (c.profiles or ""):gsub(",", ", "),
     module = c.module or "",
     tasks = c.tasks or "",
+    launcher = c.launcher or "intellij",
+    main = c.main or "",
+    vm = c.vm or "",
   }
 end
 M.values_of = values_of
@@ -134,10 +165,10 @@ local function decorate(state)
       right_gravity = false,
     })
     local value = lines[i] or ""
-    if f == "type" then
+    if CHOICE[f] then
       vim.api.nvim_buf_set_extmark(buf, ns, i - 1, 0, { end_col = #value, hl_group = "AediFormValue" })
     end
-    if value == "" and f ~= "type" then
+    if value == "" and not CHOICE[f] then
       local ph = spec.placeholder
       if f == "args" then
         ph = types.types[state.type].args_placeholder or ph
@@ -150,8 +181,10 @@ local function decorate(state)
     end
     -- what the field offers, on its right
     local right
-    if f == "type" then
+    if CHOICE[f] then
       right = { { "Enter", "AediFormKey" }, { " change", "AediFormMuted" } }
+    elseif f == "main" and i == cursor then
+      right = { { "Enter", "AediFormKey" }, { " pick", "AediFormMuted" } }
     elseif f == "profiles" then
       local avail = spring.profiles(state.root, state.values.module ~= "" and state.values.module or state.apps[1])
       right = { { #avail > 0 and table.concat(avail, " · ") or "no application-*.yml", "AediFormMuted" } }
@@ -181,7 +214,7 @@ local function decorate(state)
     virt[#virt + 1] = { { label, "AediFormLabel" }, { err or "?", "AediFormError" } }
   else
     local env = types.format_env(launch.env)
-    local text = (env ~= "" and (env .. " ") or "") .. launch.cmd
+    local text = (launch.intellij and "IntelliJ · " or "") .. (env ~= "" and (env .. " ") or "") .. launch.cmd
     for j, part in ipairs(wrap(text, width)) do
       virt[#virt + 1] = { { j == 1 and label or pad, "AediFormLabel" }, { part, "AediFormCommand" } }
     end
@@ -196,7 +229,7 @@ local function render(state)
   local fields = fields_of(state)
   local lines = {}
   for _, f in ipairs(fields) do
-    lines[#lines + 1] = f == "type" and types.types[state.type].label or (state.values[f] or "")
+    lines[#lines + 1] = CHOICE[f] and choice_text(state, f) or (state.values[f] or "")
   end
   state.rendering = true
   vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, lines)
@@ -215,12 +248,14 @@ local function read(state)
   end
   local fields = fields_of(state)
   local lines = vim.api.nvim_buf_get_lines(state.buf, 0, -1, false)
+  local broken = #lines ~= #fields
   for i, f in ipairs(fields) do
-    if f ~= "type" then
+    if CHOICE[f] then
+      broken = broken or lines[i] ~= choice_text(state, f)
+    else
       state.values[f] = lines[i] or ""
     end
   end
-  local broken = #lines ~= #fields or lines[1] ~= types.types[state.type].label
   if broken then
     if #lines > #fields then
       -- what spilled over joins the last field
@@ -305,6 +340,44 @@ local function choose_module(state)
   end)
 end
 
+local function choose_launcher(state)
+  vim.ui.select(types.launchers, {
+    prompt = "Launch Spring Boot with",
+    format_item = function(l)
+      return l.label
+    end,
+  }, function(l)
+    if l then
+      state.values.launcher = l.id
+      render(state)
+      goto_field(state, "launcher")
+    end
+  end)
+end
+
+local function choose_main(state)
+  local mains = require("aedi.jvm").mains(state.root)
+  if #mains == 0 then
+    vim.notify("No main class under src/main (fun main / static void main)", vim.log.levels.INFO)
+    return
+  end
+  vim.ui.select(mains, {
+    prompt = "Main class",
+    format_item = function(m)
+      return m.class .. (m.module ~= "" and ("  (" .. m.module .. ")") or "")
+    end,
+  }, function(m)
+    if m then
+      state.values.main = m.class
+      if state.values.name == "" then
+        state.values.name = (m.class:match("[^.]+$") or m.class):gsub("Kt$", "")
+      end
+      render(state)
+      goto_field(state, "main")
+    end
+  end)
+end
+
 --- Enter on a field: its choices, or else typing at its end.
 local function enter(state, insert)
   local f = field_at(state)
@@ -317,6 +390,12 @@ local function enter(state, insert)
   elseif f == "module" then
     vim.cmd("stopinsert")
     return choose_module(state)
+  elseif f == "launcher" then
+    vim.cmd("stopinsert")
+    return choose_launcher(state)
+  elseif f == "main" then
+    vim.cmd("stopinsert")
+    return choose_main(state)
   end
   if insert then
     -- next field
@@ -388,6 +467,7 @@ function M.open(c, on_save)
       { "Enter", "pick" },
       { ":w", "save" },
       { "Ctrl-Enter", "save and run" },
+      { "Ctrl-D", "save and debug" },
       { "q", "close" },
     }),
     footer_pos = "left",
@@ -499,7 +579,7 @@ function M.open(c, on_save)
     vim.cmd("startinsert!")
   end, "Previous field")
   k("n", "dd", function()
-    if field_at(state) ~= "type" then
+    if not CHOICE[field_at(state)] then
       vim.api.nvim_set_current_line("")
     end
   end, "Clear the field")
@@ -512,6 +592,14 @@ function M.open(c, on_save)
       require("aedi.console").start(saved)
     end
   end, "Save and run")
+  k({ "n", "i" }, "<C-d>", function()
+    vim.cmd("stopinsert")
+    local saved = save()
+    if saved then
+      vim.api.nvim_win_close(win, true)
+      require("aedi.console").start(saved, { debug = true })
+    end
+  end, "Save and debug")
 
   -- start where there is something to fill in
   local fields = fields_of(state)

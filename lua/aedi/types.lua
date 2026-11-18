@@ -1,9 +1,12 @@
--- Kinds of run configuration, IntelliJ's Spring Boot / Gradle / Shell Script:
--- which fields each has, and the command line it turns into.
+-- Kinds of run configuration, IntelliJ's Application / Spring Boot / Gradle /
+-- Shell Script: which fields each has, and what running it does.
 --
---   spring-boot   the project's build tool runs the app: `gradlew
---                 [:module:]bootRun --args='--spring.profiles.active=...'`
---                 or `mvnw spring-boot:run -Dspring-boot.run.profiles=...`
+--   application   a main class, launched through the IntelliJ server
+--                 (intellij-lsp.nvim): Run, or Debug with the debugger
+--   spring-boot   its application's main class the same way, profiles as
+--                 `--spring.profiles.active`; or, with launcher `bootRun`,
+--                 `gradlew [:module:]bootRun --args='...'` / `mvnw
+--                 spring-boot:run -Dspring-boot.run.profiles=...`
 --   gradle        `gradlew <tasks> <args>` (or Maven's wrapper and goals)
 --   shell         any command, in any directory
 
@@ -19,26 +22,45 @@ local M = {}
 ---@type table<string, aedi.Field>
 M.fields = {
   name = { label = "Name", placeholder = "how it shows in the Run list" },
+  launcher = { label = "Launch", placeholder = "", help = "Enter changes it" },
+  main = { label = "Main class", placeholder = "Enter picks one", help = "Enter picks one" },
   module = { label = "Module", placeholder = "the project root", help = "Enter picks one" },
   profiles = { label = "Profiles", placeholder = "none: the default profile", help = "Enter picks them" },
   args = { label = "Arguments", placeholder = "none" },
+  vm = { label = "VM options", placeholder = "none (e.g. -Xmx1g -Dfoo=bar)" },
   env = { label = "Environment", placeholder = "KEY=value KEY2='with space'" },
   tasks = { label = "Tasks", placeholder = "e.g. test --tests '*UserTest'" },
   command = { label = "Command", placeholder = "e.g. go run ./cmd/server" },
   cwd = { label = "Directory", placeholder = "the project root" },
 }
 
+--- Spring Boot's launchers: the IntelliJ server (Run and Debug), or the
+--- build tool's bootRun (Run only).
+M.launchers = {
+  { id = "intellij", label = "IntelliJ (Run and Debug)" },
+  { id = "bootRun", label = "Gradle bootRun / Maven spring-boot:run (Run only)" },
+}
+
 ---@class aedi.Type
 ---@field label string
 ---@field fields string[]
 ---@field args_placeholder? string
+---@field hidden? fun(field: string, values: table): boolean a field this configuration does not use
 
 ---@type table<string, aedi.Type>
 M.types = {
+  application = {
+    label = "Application",
+    fields = { "name", "main", "args", "vm", "env", "cwd" },
+    args_placeholder = "none (program arguments)",
+  },
   ["spring-boot"] = {
     label = "Spring Boot",
-    fields = { "name", "module", "profiles", "args", "env" },
+    fields = { "name", "launcher", "module", "profiles", "args", "vm", "env" },
     args_placeholder = "none (program arguments, e.g. --server.port=8081)",
+    hidden = function(field, values)
+      return field == "vm" and values.launcher == "bootRun"
+    end,
   },
   gradle = {
     label = "Gradle",
@@ -52,7 +74,7 @@ M.types = {
   },
 }
 
-M.order = { "spring-boot", "gradle", "shell" }
+M.order = { "application", "spring-boot", "gradle", "shell" }
 
 ---@param c aedi.Configuration
 ---@return string
@@ -63,6 +85,42 @@ end
 ---@param c aedi.Configuration
 function M.label(c)
   return M.types[M.of(c)].label
+end
+
+--- Runs through the IntelliJ server, so it can be debugged.
+---@param c aedi.Configuration
+function M.debuggable(c)
+  local t = M.of(c)
+  return t == "application" or (t == "spring-boot" and c.launcher ~= "bootRun")
+end
+
+--- `-Xmx1g "-Dx=a b" 'c d'` -> { "-Xmx1g", "-Dx=a b", "c d" }
+---@param s? string
+---@return string[]
+function M.split_args(s)
+  local out, cur, quote, any = {}, {}, nil, false
+  for ch in (s or ""):gmatch(".") do
+    if quote then
+      if ch == quote then
+        quote = nil
+      else
+        cur[#cur + 1] = ch
+      end
+    elseif ch == "'" or ch == '"' then
+      quote, any = ch, true
+    elseif ch:match("%s") then
+      if #cur > 0 or any then
+        out[#out + 1] = table.concat(cur)
+      end
+      cur, any = {}, false
+    else
+      cur[#cur + 1] = ch
+    end
+  end
+  if #cur > 0 or any then
+    out[#out + 1] = table.concat(cur)
+  end
+  return out
 end
 
 -- ---------------------------------------------------------------------------
@@ -152,6 +210,52 @@ function M.build(c, root)
       cwd = vim.fs.normalize(cwd)
     end
     return { cmd = c.command .. (nonempty(c.args) and (" " .. c.args) or ""), cwd = cwd, env = c.env }
+  end
+
+  if t == "application" or (t == "spring-boot" and c.launcher ~= "bootRun") then
+    local jvm = require("aedi.jvm")
+    local main
+    if t == "application" then
+      if not nonempty(c.main) then
+        return nil, "no main class"
+      end
+      main = jvm.find(root, c.main) or { class = c.main, file = root }
+    else
+      main = jvm.spring_main(root, c.module)
+      if not main then
+        return nil, "no @SpringBootApplication main class" .. (nonempty(c.module) and (" in " .. c.module) or "")
+      end
+    end
+    local args = M.split_args(c.args)
+    local profiles = spring.normalize(c.profiles)
+    if t == "spring-boot" and profiles ~= "" then
+      table.insert(args, 1, "--spring.profiles.active=" .. profiles)
+    end
+    local cwd = root
+    if nonempty(c.cwd) and c.cwd ~= "." then
+      cwd = vim.fs.normalize(c.cwd:sub(1, 1) == "/" and c.cwd or (root .. "/" .. c.cwd))
+    end
+    local vm = M.split_args(c.vm)
+    local shown = { "java" }
+    vim.list_extend(shown, vm)
+    shown[#shown + 1] = main.class
+    vim.list_extend(shown, args)
+    return {
+      cmd = table.concat(vim.tbl_map(function(a)
+        return a:find("[%s'\"]") and vim.fn.shellescape(a) or a
+      end, shown), " "),
+      cwd = cwd,
+      env = c.env,
+      intellij = {
+        name = c.name,
+        mainClass = main.class,
+        file = main.file,
+        args = args,
+        vmArgs = vm,
+        env = c.env,
+        cwd = cwd,
+      },
+    }
   end
 
   local tool, kind = require("aedi.detect").build_tool(root)

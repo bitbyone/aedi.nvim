@@ -6,8 +6,9 @@
 --
 --   * Its output panel (a launched main class, a test run, the build's import
 --     log) is a tab of the Run panel, "IntelliJ" until a program runs, then
---     named after it. ● while it runs, then its exit code; `r` runs it again
---     (nvim-dap's run_last), Ctrl-C stops it.
+--     named after it (or after the aedi configuration that launched it). ●
+--     while it runs, then its exit code; `r` runs it again, `d` in the
+--     debugger, Ctrl-C stops it.
 --   * Its debug sessions (`intellij_jvm`) get the Debug panel, with that same
 --     output as the Console tab. Plain runs and test runs (`noDebug`) stay in
 --     the Run panel.
@@ -69,7 +70,15 @@ function M.setup()
     if not ours(session) then
       return
     end
-    local name = session.config.mainClass and session.config.mainClass:match("[^.]+$") or session.config.name
+    local name
+    if session.config.aedi then
+      -- one of aedi's run configurations: its own name
+      name = session.config.name
+    else
+      -- the Run lens: the class; `r` then reruns it, not an older aedi launch
+      console.last_launch = nil
+      name = session.config.mainClass and session.config.mainClass:match("[^.]+$") or session.config.name
+    end
     console.set_state(ensure(name), "running")
   end
   local exit_codes = {}

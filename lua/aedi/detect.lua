@@ -75,11 +75,9 @@ local function gradle(root)
   return out
 end
 
---- A Spring Boot configuration per application in the project.
+--- A Spring Boot configuration per application in the project: run and
+--- debugged through the IntelliJ server.
 local function spring_boot(root)
-  if not M.build_tool(root) then
-    return {}
-  end
   local apps = require("aedi.spring").apps(root)
   local out = {}
   for _, dir in ipairs(apps) do
@@ -91,6 +89,24 @@ local function spring_boot(root)
       kind = "run",
       detected = true,
     }
+  end
+  return out
+end
+
+--- An Application configuration per main class that is not a Spring Boot
+--- application's (those have their own).
+local function applications(root)
+  local out = {}
+  for _, m in ipairs(require("aedi.jvm").mains(root)) do
+    if not m.spring then
+      out[#out + 1] = {
+        name = (m.class:match("[^.]+$") or m.class):gsub("Kt$", ""),
+        type = "application",
+        main = m.class,
+        kind = "run",
+        detected = true,
+      }
+    end
   end
   return out
 end
@@ -184,7 +200,7 @@ local function make(root)
   return out
 end
 
-M.builtin = { spring_boot, gradle, go, cargo, node, make }
+M.builtin = { spring_boot, applications, gradle, go, cargo, node, make }
 
 --- Everything the detectors find in `root`.
 ---@param root string

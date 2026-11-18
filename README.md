@@ -43,19 +43,30 @@ most recently, come first (frecency).
 | key | |
 | --- | --- |
 | `Enter` | run |
+| `Ctrl-D` | debug (Application, Spring Boot) |
 | `Ctrl-E` | edit; a found configuration is saved as a copy of your own |
 | `Ctrl-N` | new |
 | `Ctrl-Y` | duplicate |
 | `Ctrl-X` | delete |
 
-There are three types:
+There are four types:
 
 | type | fields | runs |
 | --- | --- | --- |
-| **Spring Boot** | module, profiles, arguments, environment | `./gradlew [:module:]bootRun --args='--spring.profiles.active=local …'` or `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` |
+| **Application** | main class, arguments, VM options, environment, directory | the main class through the IntelliJ server (Run and **Debug**) |
+| **Spring Boot** | launch, module, profiles, arguments, VM options, environment | its application's main class through the IntelliJ server, profiles as `--spring.profiles.active` (Run and **Debug**); or with launch `bootRun`, `./gradlew [:module:]bootRun --args='…'` / `./mvnw spring-boot:run -Dspring-boot.run.profiles=…` |
 | **Gradle** | tasks, arguments, environment | `./gradlew <tasks> <arguments>` |
 | **Shell command** | command, arguments, directory, environment | the command, through `'shell'` |
 
+Application and Spring Boot launch through
+[intellij-lsp.nvim](https://github.com/JetBrains/intellij-lsp.nvim), as its
+Run / Debug lenses do. The project's build tool builds first, then the
+program runs (or is debugged) as IntelliJ's Application configuration would
+run it. The IntelliJ server has to be running. Debug opens the Debug panel.
+`Ctrl-D` in the list, `:AediDebug` and `d` in the Run panel debug.
+
+Main classes (`fun main`, `static void main` under `src/main`) are offered
+as Application configurations.
 Spring Boot applications are found by their `@SpringBootApplication` under
 `src/main`, one configuration each. Their profiles come from
 `application-<profile>.yml|yaml|properties` and from `on-profile:` documents.
@@ -112,6 +123,7 @@ working directory by default). Nothing is written into the project.
 | command | Lua | |
 | --- | --- | --- |
 | `:AediRun [name]` | `pick()`, `run(name_or_config)` | pick and run |
+| `:AediDebug [name]` | `pick_debug()`, `debug(name_or_config)` | pick and debug |
 | `:AediRerun` | `rerun()` | run the last configuration again |
 | `:AediEdit [name]`, `:AediNew` | `edit(name)`, `new()` | edit or create a configuration |
 | `:AediStop` | `stop()` | stop the current tab |

@@ -136,9 +136,11 @@ end
 --- An external tab (IntelliJ's output) has no configuration to edit.
 local function hint_for(run)
   if run and run.external then
-    return vim.tbl_filter(function(h)
-      return h[1] ~= "e"
-    end, HINT)
+    local out = { { "r", "rerun" }, { "d", "debug" } }
+    vim.list_extend(out, vim.tbl_filter(function(h)
+      return h[1] ~= "e" and h[1] ~= "r"
+    end, HINT))
+    return out
   end
   return HINT
 end
@@ -364,7 +366,9 @@ local function map(buf, run)
   k("<Esc>", M.to_editor, "Back to the editor")
   k("r", function()
     if run.external then
-      if run.rerun then
+      if M.last_launch then
+        M.start(M.last_launch.config, { debug = M.last_launch.debug })
+      elseif run.rerun then
         run.rerun()
       end
     else
@@ -374,6 +378,10 @@ local function map(buf, run)
   k("<C-c>", function()
     M.stop(run)
   end, "Stop (again: kill)")
+  k("d", function()
+    local c = run.external and M.last_launch and M.last_launch.config or run.config
+    M.start(c, { debug = true })
+  end, "Debug it")
   k("x", function()
     M.close(index_of(run))
   end, "Close the tab")
@@ -446,10 +454,27 @@ end
 --- Run `c` in its tab (a new one, or the one it ran in before).
 ---@param c aedi.Configuration
 ---@return aedi.Run?
-function M.start(c)
-  local launch, err = require("aedi.types").build(c, util.root())
+---@param opts? { debug?: boolean }
+function M.start(c, opts)
+  local debug = opts and opts.debug
+  local types = require("aedi.types")
+  local launch, err = types.build(c, util.root())
   if not launch then
     vim.notify(("Cannot run %s: %s"):format(c.name, err), vim.log.levels.ERROR)
+    return
+  end
+  -- Through the IntelliJ server: its output is the IntelliJ tab of this
+  -- panel (lua/aedi/integrations/intellij_lsp.lua), a debug session the
+  -- Debug panel.
+  if launch.intellij then
+    if require("aedi.jvm").launch(launch.intellij, debug) then
+      require("aedi.store").set_last(c)
+      M.last_launch = { config = vim.deepcopy(c), debug = debug }
+    end
+    return
+  end
+  if debug then
+    vim.notify(("%s cannot be debugged: a %s runs in a terminal, not under the debugger"):format(c.name, types.label(c)), vim.log.levels.WARN)
     return
   end
   local cwd = launch.cwd

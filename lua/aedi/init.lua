@@ -21,9 +21,22 @@ function M.pick()
   require("aedi.picker").pick()
 end
 
+--- Pick a configuration and debug it (Application, Spring Boot: through the
+--- IntelliJ server).
+function M.pick_debug()
+  require("aedi.picker").pick({ debug = true })
+end
+
+--- Debug a configuration: a table, or the name of a saved or found one.
+---@param c aedi.Configuration|string
+function M.debug(c)
+  return M.run(c, { debug = true })
+end
+
 --- Run a configuration: a table, or the name of a saved or detected one.
 ---@param c aedi.Configuration|string
-function M.run(c)
+---@param opts? { debug?: boolean }
+function M.run(c, opts)
   if type(c) == "string" then
     local name = c
     c = require("aedi.store").get(name)
@@ -40,7 +53,7 @@ function M.run(c)
       return
     end
   end
-  return console().start(c)
+  return console().start(c, opts)
 end
 
 --- Run a shell command in the panel without saving it (`e` in the panel
@@ -134,6 +147,13 @@ function M.setup(opts)
       M.pick()
     end
   end, { nargs = "?", complete = complete_names, desc = "Run a configuration" })
+  cmd("AediDebug", function(a)
+    if a.args ~= "" then
+      M.debug(a.args)
+    else
+      M.pick_debug()
+    end
+  end, { nargs = "?", complete = complete_names, desc = "Debug a configuration" })
   cmd("AediRerun", M.rerun, { desc = "Run the last configuration again" })
   cmd("AediEdit", function(a)
     M.edit(a.args)
