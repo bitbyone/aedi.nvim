@@ -1,0 +1,483 @@
+-- The Run panel: IntelliJ's Run tool window, a split across the bottom with a
+-- tab per configuration that ran.
+--
+--   ● App   ✓ go test ./... 3.1s   ✗ gradle build 1         r rerun  ^C stop ...
+--
+-- Each tab is a terminal running the configuration's command, so colours,
+-- progress bars and stdin work (`i` types into the program). Running a
+-- configuration again reuses its tab. Output stays after the process exits;
+-- `x` closes the tab.
+--
+-- In the panel (normal mode):
+--   r        rerun          <C-c>   stop (Ctrl-C; again: kill)
+--   x        close the tab  e       edit the configuration
+--   <CR>     open the file / stack frame under the cursor
+--   <Tab> <S-Tab>, <C-S-l> <C-S-h>   next / previous tab
+--   q        hide           <Esc>   back to the editor
+
+local util = require("aedi.util")
+
+local M = {}
+
+---@class aedi.Run
+---@field id integer
+---@field config aedi.Configuration
+---@field buf integer
+---@field job integer?
+---@field cwd string
+---@field code integer? exit code; nil while running
+---@field started integer
+---@field ended integer?
+---@field stopping boolean?
+
+---@type aedi.Run[]
+M.runs = {}
+---@type integer? index into M.runs
+M.current = nil
+---@type integer?
+M.win = nil
+
+local next_id = 0
+
+local function valid_win()
+  return M.win ~= nil and vim.api.nvim_win_is_valid(M.win)
+end
+
+---@return aedi.Run?
+function M.current_run()
+  return M.current and M.runs[M.current] or nil
+end
+
+--- Is the panel on screen in this tab?
+function M.visible()
+  return valid_win() and vim.api.nvim_win_get_tabpage(M.win) == vim.api.nvim_get_current_tabpage()
+end
+
+local function running(run)
+  return run.code == nil
+end
+M.running = running
+
+local function duration(run)
+  local ms = ((run.ended or vim.uv.now()) - run.started)
+  if ms < 1000 then
+    return ("%dms"):format(ms)
+  elseif ms < 60000 then
+    return ("%.1fs"):format(ms / 1000)
+  end
+  return ("%dm%02ds"):format(ms / 60000, (ms / 1000) % 60)
+end
+
+local function status(run)
+  if running(run) then
+    return "●"
+  elseif run.stopping then
+    return "■"
+  elseif run.code == 0 then
+    return "✓"
+  end
+  return "✗"
+end
+
+-- ---------------------------------------------------------------------------
+-- Winbar
+-- ---------------------------------------------------------------------------
+
+---@param i integer
+function _G.AediConsoleTab(i, _, button)
+  if button == "l" then
+    M.select(i)
+  elseif button == "m" then
+    M.close(i)
+  end
+end
+
+local HINT = " r rerun  ^C stop  x close  e edit  ⏎ open "
+
+function M.render()
+  if not valid_win() then
+    return
+  end
+  local parts = {}
+  for i, run in ipairs(M.runs) do
+    local sel = i == M.current
+    local hl = sel and "%#AediTabSel#" or "%#AediTab#"
+    local icon_hl = (running(run) and "%#AediRunning#")
+      or (run.stopping and hl)
+      or (run.code == 0 and "%#AediPassed#" or "%#AediFailed#")
+    local tail = ""
+    if not running(run) then
+      tail = (run.code ~= 0 and not run.stopping) and (" " .. run.code) or (" " .. duration(run))
+    end
+    parts[#parts + 1] = ("%%%d@v:lua.AediConsoleTab@%s %s%s%s %s%s %%X"):format(
+      i,
+      hl,
+      sel and icon_hl or "",
+      status(run),
+      hl,
+      run.config.name:gsub("%%", "%%%%"),
+      tail
+    )
+  end
+  vim.wo[M.win].winbar = table.concat(parts, "%#AediTabFill# ") .. "%#AediTabFill#%=%#AediHint#" .. HINT
+end
+
+-- ---------------------------------------------------------------------------
+-- Window
+-- ---------------------------------------------------------------------------
+
+local function open_win()
+  local prev = vim.api.nvim_get_current_win()
+  vim.cmd(("botright %dsplit"):format(require("aedi.config").options.console.height))
+  M.win = vim.api.nvim_get_current_win()
+  vim.wo[M.win].winfixheight = true
+  util.bare(M.win)
+  util.panel(M.win)
+  if vim.api.nvim_win_is_valid(prev) then
+    vim.api.nvim_set_current_win(prev)
+  end
+end
+
+--- Show the panel (on the current run), keeping focus where it is.
+---@param focus? boolean
+function M.show(focus)
+  local run = M.current_run()
+  if not run then
+    vim.notify("Nothing has run yet", vim.log.levels.INFO)
+    return
+  end
+  if valid_win() and not M.visible() then
+    pcall(vim.api.nvim_win_close, M.win, true)
+  end
+  if not valid_win() then
+    open_win()
+  end
+  if vim.api.nvim_win_get_buf(M.win) ~= run.buf then
+    vim.api.nvim_win_set_buf(M.win, run.buf)
+    util.bare(M.win)
+  end
+  M.render()
+  if focus then
+    vim.api.nvim_set_current_win(M.win)
+  end
+end
+
+function M.hide()
+  if valid_win() then
+    -- the last window of a tab cannot be closed; leave it be
+    pcall(vim.api.nvim_win_close, M.win, false)
+  end
+  M.win = nil
+end
+
+--- Back to the code.
+function M.to_editor()
+  local win = util.code_win()
+  if win then
+    vim.api.nvim_set_current_win(win)
+  else
+    vim.cmd("wincmd p")
+  end
+end
+
+--- IntelliJ's cmd+4: open and focus; focused already, hide.
+function M.toggle()
+  if M.visible() and vim.api.nvim_get_current_win() == M.win then
+    M.hide()
+    M.to_editor()
+  elseif M.visible() then
+    vim.api.nvim_set_current_win(M.win)
+  else
+    M.show(true)
+  end
+end
+
+---@param i integer
+function M.select(i)
+  if not M.runs[i] then
+    return
+  end
+  M.current = i
+  M.show()
+end
+
+---@param delta integer
+function M.cycle(delta)
+  if #M.runs == 0 then
+    return
+  end
+  M.select(((M.current or 1) - 1 + delta) % #M.runs + 1)
+end
+
+-- ---------------------------------------------------------------------------
+-- Runs
+-- ---------------------------------------------------------------------------
+
+---@param run aedi.Run
+local function index_of(run)
+  for i, r in ipairs(M.runs) do
+    if r == run then
+      return i
+    end
+  end
+end
+
+--- Ctrl-C into the terminal -- the program sees what a terminal gives it --
+--- and, when it is already stopping, kill.
+---@param run? aedi.Run
+function M.stop(run)
+  run = run or M.current_run()
+  if not (run and running(run)) then
+    return false
+  end
+  if run.stopping then
+    vim.fn.jobstop(run.job)
+  else
+    run.stopping = true
+    pcall(vim.api.nvim_chan_send, run.job, "\3")
+  end
+  M.render()
+  return true
+end
+
+---@param i? integer
+function M.close(i)
+  i = i or M.current
+  local run = i and M.runs[i]
+  if not run then
+    return
+  end
+  if running(run) then
+    vim.fn.jobstop(run.job)
+  end
+  M.forget(run)
+  if vim.api.nvim_buf_is_valid(run.buf) then
+    pcall(vim.api.nvim_buf_delete, run.buf, { force = true })
+  end
+end
+
+--- Take `run` off the panel (its buffer is gone or going).
+---@param run aedi.Run
+function M.forget(run)
+  local i = index_of(run)
+  if not i then
+    return
+  end
+  table.remove(M.runs, i)
+  if #M.runs == 0 then
+    M.current = nil
+    M.hide()
+    return
+  end
+  if M.current > i then
+    M.current = M.current - 1
+  end
+  M.current = math.max(1, math.min(M.current, #M.runs))
+  if valid_win() then
+    M.show()
+  end
+end
+
+local function map(buf, run)
+  local function k(lhs, fn, desc)
+    vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, desc = desc })
+  end
+  k("q", M.hide, "Hide the Run panel")
+  k("<Esc>", M.to_editor, "Back to the editor")
+  k("r", function()
+    M.start(run.config)
+  end, "Rerun")
+  k("<C-c>", function()
+    M.stop(run)
+  end, "Stop (again: kill)")
+  k("x", function()
+    M.close(index_of(run))
+  end, "Close the tab")
+  k("e", function()
+    require("aedi.editor").open(run.config)
+  end, "Edit the configuration")
+  k("<CR>", function()
+    M.follow_link(run)
+  end, "Open the location under the cursor")
+  for _, lhs in ipairs({ "<Tab>", "<C-S-l>", "<C-S-j>" }) do
+    k(lhs, function()
+      M.cycle(1)
+    end, "Next run")
+  end
+  for _, lhs in ipairs({ "<S-Tab>", "<C-S-h>", "<C-S-k>" }) do
+    k(lhs, function()
+      M.cycle(-1)
+    end, "Previous run")
+  end
+end
+
+--- `<CR>`: the file or stack frame under the cursor. A terminal breaks a
+--- long line at the window's width, so the line is also tried joined to the
+--- ones around it.
+---@param run aedi.Run
+function M.follow_link(run)
+  local links = require("aedi.links")
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local lines = vim.api.nvim_buf_get_lines(run.buf, math.max(row - 2, 0), row + 1, false)
+  local first = math.max(row - 2, 0) + 1
+  local cur = lines[row - first + 1] or ""
+  local prev = row > 1 and lines[1] or ""
+  local nxt = lines[row - first + 2] or ""
+  local tries = {
+    { cur, col + 1 },
+    { prev .. cur, #prev + col + 1 },
+    { cur .. nxt, col + 1 },
+    { prev .. cur .. nxt, #prev + col + 1 },
+  }
+  local candidates = {}
+  for _, t in ipairs(tries) do
+    vim.list_extend(candidates, links.candidates(t[1], t[2]))
+  end
+  if #candidates == 0 then
+    return
+  end
+  local from = vim.api.nvim_get_current_win()
+  M.to_editor()
+  local win = vim.api.nvim_get_current_win()
+  if win == M.win then
+    vim.cmd("aboveleft split")
+    win = vim.api.nvim_get_current_win()
+  end
+  for _, loc in ipairs(candidates) do
+    if links.open(loc, { run.cwd, util.root() }, win) then
+      return
+    end
+  end
+  if vim.api.nvim_win_is_valid(from) then
+    vim.api.nvim_set_current_win(from)
+  end
+  local loc = candidates[1]
+  vim.notify("Not found: " .. (loc.file or (loc.frame and loc.frame.file) or "?"), vim.log.levels.WARN)
+end
+
+--- The shell command line of `c`.
+---@param c aedi.Configuration
+function M.command_line(c)
+  local cmd = c.command
+  if c.args and c.args ~= "" then
+    cmd = cmd .. " " .. c.args
+  end
+  return cmd
+end
+
+---@param c aedi.Configuration
+---@return string
+function M.cwd_of(c)
+  local root = util.root()
+  local cwd = c.cwd
+  if not cwd or cwd == "" or cwd == "." then
+    return root
+  end
+  cwd = vim.fn.expand(cwd)
+  if cwd:sub(1, 1) ~= "/" then
+    cwd = root .. "/" .. cwd
+  end
+  return vim.fs.normalize(cwd)
+end
+
+--- Run `c` in its tab (a new one, or the one it ran in before).
+---@param c aedi.Configuration
+---@return aedi.Run?
+function M.start(c)
+  local cwd = M.cwd_of(c)
+  if not vim.uv.fs_stat(cwd) then
+    vim.notify(("Working directory does not exist: %s"):format(cwd), vim.log.levels.ERROR)
+    return
+  end
+  local slot
+  for i, r in ipairs(M.runs) do
+    if r.config.name == c.name then
+      slot = i
+      break
+    end
+  end
+  local old = slot and M.runs[slot]
+  if old and running(old) then
+    vim.fn.jobstop(old.job)
+  end
+
+  next_id = next_id + 1
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "hide"
+  ---@type aedi.Run
+  local run = { id = next_id, config = vim.deepcopy(c), buf = buf, cwd = cwd, started = vim.uv.now() }
+  if slot then
+    M.runs[slot] = run
+  else
+    M.runs[#M.runs + 1] = run
+    slot = #M.runs
+  end
+  M.current = slot
+  M.show()
+
+  local line = M.command_line(c)
+  -- The command first, dimmed, as IntelliJ prints the command line it ran.
+  local header = ("printf '\\033[2m%%s\\033[0m\\n' %s; "):format(vim.fn.shellescape("$ " .. line))
+  vim.api.nvim_win_call(M.win, function()
+    run.job = vim.fn.jobstart({ vim.o.shell, "-c", header .. line }, {
+      term = true,
+      cwd = cwd,
+      env = c.env,
+      on_exit = function(_, code)
+        run.code = code
+        run.ended = vim.uv.now()
+        vim.schedule(function()
+          M.render()
+          if index_of(run) and not M.visible() then
+            local ok = code == 0 or run.stopping
+            vim.notify(
+              ("%s %s"):format(c.name, run.stopping and "stopped" or (code == 0 and "finished" or ("failed (" .. code .. ")"))),
+              ok and vim.log.levels.INFO or vim.log.levels.ERROR
+            )
+          end
+        end)
+      end,
+    })
+  end)
+  if not run.job or run.job <= 0 then
+    run.code, run.ended, run.job = -1, vim.uv.now(), nil
+    vim.notify("Could not start: " .. line, vim.log.levels.ERROR)
+  end
+  vim.bo[buf].filetype = "aedi-console"
+  map(buf, run)
+  -- A key pressed in terminal mode after the process ended wipes the buffer
+  -- (Neovim's own behaviour); the tab goes with it.
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    buffer = buf,
+    once = true,
+    callback = function()
+      vim.schedule(function()
+        M.forget(run)
+      end)
+    end,
+  })
+  -- Terminal mode left with <C-\><C-n> lands on the last line, so the window
+  -- keeps following the output.
+  pcall(vim.api.nvim_win_set_cursor, M.win, { vim.api.nvim_buf_line_count(buf), 0 })
+  if old and vim.api.nvim_buf_is_valid(old.buf) then
+    pcall(vim.api.nvim_buf_delete, old.buf, { force = true })
+  end
+  M.render()
+  require("aedi.store").set_last(c)
+  return run
+end
+
+function M.setup()
+  local function link(name, to)
+    vim.api.nvim_set_hl(0, name, { link = to, default = true })
+  end
+  link("AediTab", "TabLine")
+  link("AediTabSel", "TabLineSel")
+  link("AediTabFill", "TabLineFill")
+  link("AediHint", "Comment")
+  link("AediRunning", "DiagnosticInfo")
+  link("AediPassed", "DiagnosticOk")
+  link("AediFailed", "DiagnosticError")
+end
+
+return M
