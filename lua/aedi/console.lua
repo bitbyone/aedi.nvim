@@ -151,29 +151,30 @@ function M.render()
     vim.wo[M.win].winbar = "%#AediTabFill#%=" .. require("aedi.hints").statusline(EMPTY_HINT)
     return
   end
-  local parts = {}
+  local tabs = {}
   for i, run in ipairs(M.runs) do
-    local sel = i == M.current
-    local hl = sel and "%#AediTabSel#" or "%#AediTab#"
-    local icon_hl = (run.idle and hl)
-      or (running(run) and "%#AediRunning#")
-      or (run.stopping and hl)
-      or (run.code == 0 and "%#AediPassed#" or "%#AediFailed#")
+    local icon_group = (run.idle and nil)
+      or (running(run) and "AediRunning")
+      or (run.stopping and nil)
+      or (run.code == 0 and "AediPassed" or "AediFailed")
     local tail = ""
     if not running(run) and not run.idle then
-      tail = (run.code ~= 0 and not run.stopping) and (" " .. run.code) or (" " .. duration(run))
+      tail = (run.code ~= 0 and not run.stopping) and tostring(run.code) or duration(run)
     end
-    parts[#parts + 1] = ("%%%d@v:lua.AediConsoleTab@%s %s%s%s %s%s %%X"):format(
-      i,
-      hl,
-      sel and icon_hl or "",
-      status(run),
-      hl,
-      run.config.name:gsub("%%", "%%%%"),
-      tail
-    )
+    tabs[#tabs + 1] = {
+      text = run.config.name,
+      icon = status(run),
+      icon_group = icon_group,
+      tail = tail,
+      selected = i == M.current,
+      click = "AediConsoleTab",
+      id = i,
+    }
   end
-  vim.wo[M.win].winbar = table.concat(parts, "%#AediTabFill# ") .. "%#AediTabFill#%=" .. require("aedi.hints").statusline(hint_for(M.current_run()))
+  local focused = vim.api.nvim_get_current_win() == M.win
+  vim.wo[M.win].winbar = require("aedi.tabs").render(tabs, focused)
+    .. "%="
+    .. require("aedi.hints").statusline(hint_for(M.current_run()))
 end
 
 -- ---------------------------------------------------------------------------
@@ -643,6 +644,10 @@ function M.setup()
       if util.is_code_win(win) then
         M.last_code = win
       end
+      -- the current tab's edge is accented only while the panel has focus
+      if valid_win() then
+        M.render()
+      end
     end,
   })
   vim.api.nvim_create_autocmd("WinClosed", {
@@ -666,9 +671,7 @@ function M.setup()
   local function link(name, to)
     vim.api.nvim_set_hl(0, name, { link = to, default = true })
   end
-  link("AediTab", "TabLine")
-  link("AediTabSel", "TabLineSel")
-  link("AediTabFill", "TabLineFill")
+  require("aedi.tabs").setup()
   link("AediRunning", "DiagnosticInfo")
   link("AediPassed", "DiagnosticOk")
   link("AediFailed", "DiagnosticError")

@@ -95,13 +95,11 @@ local function render_winbar()
     return
   end
   util.panel(M.win)
-  local on, off = "%#TabLineSel#", "%#TabLine#"
-  vim.wo[M.win].winbar = (M.console and off or on)
-    .. " Variables "
-    .. (M.console and on or off)
-    .. " Console "
-    .. "%#TabLineFill#%="
-    .. require("aedi.hints").statusline({ { "Ctrl-Shift-L", "Variables / Console" }, { "Esc", "editor" } })
+  local focused = vim.api.nvim_get_current_win() == M.win
+  vim.wo[M.win].winbar = require("aedi.tabs").render({
+    { text = "Variables", selected = not M.console },
+    { text = "Console", selected = M.console },
+  }, focused)
 end
 
 local function follow_tail()
@@ -324,6 +322,15 @@ end
 --- Autocommands: <Esc> out of dap-ui panes, and the Debug panel laid out again
 --- under a sidebar opened while it is up.
 function M.setup()
+  -- the current tab's edge is accented only while the window has focus
+  vim.api.nvim_create_autocmd("WinEnter", {
+    group = vim.api.nvim_create_augroup("aedi_debug_tabs", { clear = true }),
+    callback = function()
+      if M.on and M.win and vim.api.nvim_win_is_valid(M.win) then
+        render_winbar()
+      end
+    end,
+  })
   -- <Esc> in any dap-ui pane goes back to the editor, the way it leaves a tool
   -- window in IntelliJ. Normal mode only: in the Watches prompt <Esc> still
   -- just leaves insert mode first.

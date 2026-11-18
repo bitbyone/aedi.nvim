@@ -31,15 +31,21 @@ local PLACES = {
   bar = { "AediTabFill", "TabLineFill", "WinBar", "Normal" },
 }
 
+--- The groups of one place, from the colours as they are now (cheap, and
+--- it follows a group relinked after setup).
+local function define_place(place)
+  local bg = first("bg", unpack(PLACES[place]))
+  local function set(role, fg)
+    vim.api.nvim_set_hl(0, "AediHint" .. role .. "_" .. place, { fg = fg, bg = bg })
+  end
+  set("Key", first("fg", "FloatTitle", "Special", "Title"))
+  set("", first("fg", "Comment", "NonText"))
+  set("Sep", first("fg", "NonText", "Comment"))
+end
+
 local function define()
-  for place, bgs in pairs(PLACES) do
-    local bg = first("bg", unpack(bgs))
-    local function set(role, fg)
-      vim.api.nvim_set_hl(0, "AediHint" .. role .. "_" .. place, { fg = fg, bg = bg })
-    end
-    set("Key", first("fg", "FloatTitle", "Special", "Title"))
-    set("", first("fg", "Comment", "NonText"))
-    set("Sep", first("fg", "NonText", "Comment"))
+  for place in pairs(PLACES) do
+    define_place(place)
   end
 end
 
@@ -49,6 +55,7 @@ end
 ---@return { [1]: string, [2]: string }[]
 function M.chunks(hint, place)
   place = place or "float"
+  define_place(place)
   local key, text, sep = "AediHintKey_" .. place, "AediHint_" .. place, "AediHintSep_" .. place
   local out = { { " ", text } }
   for i, h in ipairs(hint) do
