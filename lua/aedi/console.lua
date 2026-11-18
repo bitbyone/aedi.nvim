@@ -210,6 +210,10 @@ function M.show(focus)
     vim.api.nvim_win_set_buf(M.win, buf)
     util.bare(M.win)
   end
+  if run and run.to_end then
+    run.to_end = nil
+    pcall(vim.api.nvim_win_set_cursor, M.win, { vim.api.nvim_buf_line_count(buf), 0 })
+  end
   M.render()
   if focus then
     vim.api.nvim_set_current_win(M.win)
@@ -632,6 +636,13 @@ function M.set_state(run, state, code)
   if state == "running" then
     run.idle, run.code, run.ended, run.stopping = false, nil, nil, nil
     run.started = vim.uv.now()
+    -- A new run follows its output again, however far up the last one was
+    -- left (its buffer is reused): now if it is on screen, else when shown.
+    run.to_end = true
+    if valid_win() and vim.api.nvim_win_get_buf(M.win) == run.buf then
+      run.to_end = nil
+      pcall(vim.api.nvim_win_set_cursor, M.win, { vim.api.nvim_buf_line_count(run.buf), 0 })
+    end
   else
     if run.idle or run.code ~= nil then
       return
