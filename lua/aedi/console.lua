@@ -363,6 +363,10 @@ function M.forget(run)
 end
 
 local function map(buf, run)
+  -- No smooth scrolling (snacks.scroll) in output: following the end moves
+  -- the cursor there at once, and an animation still on its way down looked
+  -- like you had scrolled up, so the tab stopped following.
+  vim.b[buf].snacks_scroll = false
   local function k(lhs, fn, desc)
     vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, desc = desc })
   end
