@@ -98,7 +98,6 @@ local HINT = {
   { "x", "close tab" },
   { "e", "edit" },
   { "Enter", "go to source" },
-  { "Tab", "next run" },
   { "q", "hide" },
 }
 
