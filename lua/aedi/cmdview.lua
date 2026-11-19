@@ -6,10 +6,10 @@
 --               -Dwho=world
 --   MAIN        x.Main
 --   ARGS        a b
+--   ENV         JAVA_HOME=...
 --   CLASSPATH   42 entries
 --               ~/proj/app/build/classes/java/main
 --               ...
---   ENV         JAVA_HOME=...
 --
 -- `y` copies the whole command line; `q` / Esc close.
 
@@ -62,13 +62,14 @@ local function content(run)
     field("VM", jvm.vm)
     field("MAIN", jvm.main)
     field("ARGS", #jvm.args > 0 and table.concat(jvm.args, " ") or {})
+    field("ENV", env_lines(c.env))
+    -- last: it is the long one
     if #jvm.classpath > 0 then
       field("CLASSPATH", ("%d entr%s"):format(#jvm.classpath, #jvm.classpath == 1 and "y" or "ies"))
       for _, e in ipairs(jvm.classpath) do
         lines[#lines + 1] = (" "):rep(LABEL) .. short(e)
       end
     end
-    field("ENV", env_lines(c.env))
     lines[#lines + 1] = ""
     lines[#lines + 1] = c.by_mark and ("%s, the process this launch started."):format(c.debug and "Debug" or "Run")
       or "Matched by main class: a Run lens launch carries no mark of aedi's."

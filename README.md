@@ -70,8 +70,8 @@ IntelliJ launch that is the JVM's actual command line:
 - `java`, so which JDK ran;
 - every VM option, one per line;
 - the main class and its arguments;
-- the classpath, entry by entry;
-- the environment.
+- the environment;
+- the classpath, entry by entry, last.
 
 `y` copies it.
 
