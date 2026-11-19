@@ -96,6 +96,27 @@ Configurations are stored per project in
 `stdpath("data")/aedi/configurations.json`, keyed by the project root (the
 working directory by default). Nothing is written into the project.
 
+## Gradle tasks
+
+`:AediGradle` (`require("aedi").gradle()`) lists every task of every project,
+with its group and description, the way IntelliJ's Gradle tool window does.
+
+| key | |
+| --- | --- |
+| `Enter` | run the task in the Run panel; text that matches no task (`test --tests '*UserTest'`) runs as typed |
+| `Ctrl-E` | put the task into the input, so you can add arguments |
+
+The list comes from a background run of `./gradlew help`. It runs at low
+priority with the plugin's init script (`gradle/aedi-tasks.gradle`), which
+writes the tasks as JSON. That run happens a few seconds after Neovim starts
+in a Gradle project, and again when a build file changes. Nothing shows while
+it runs.
+
+The list is kept per project in `stdpath("data")/aedi/gradle/`. It is keyed by
+the build files, so a build that has not changed is not indexed again. In the
+form of a Gradle configuration, `Enter` on Tasks picks from the same list.
+`setup({ gradle = { index = false } })` turns indexing off.
+
 ## Run panel
 
 | key (normal mode) | |
@@ -152,6 +173,7 @@ checked, so a long log stays fast.
 | command | Lua | |
 | --- | --- | --- |
 | `:AediRun [name]` | `pick()`, `run(name_or_config)` | pick and run |
+| `:AediGradle [task…]` | `gradle()` | pick a Gradle task (or run the one given) |
 | `:AediDebug [name]` | `pick_debug()`, `debug(name_or_config)` | pick and debug |
 | `:AediRerun` | `rerun()` | run the last configuration again |
 | `:AediEdit [name]`, `:AediNew` | `edit(name)`, `new()` | edit or create a configuration |

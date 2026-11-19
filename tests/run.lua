@@ -261,6 +261,38 @@ test("grep: levels, overrides, off", function()
   grep.configure()
 end)
 
+test("gradle: tasks from the init script's JSON", function()
+  local json = vim.json.encode({
+    { name = "app:test", group = "verification", description = "Runs the tests." },
+    { name = "prepareKotlinIdeaImport", group = "", description = "" },
+    { name = "app:bootRun", group = "application", description = "Runs it." },
+    { name = "build", group = "build", description = "Builds." },
+    { name = "app:build", group = "build", description = "Builds." },
+    { name = "openApi", group = "openapi", description = "Generates." },
+  })
+  eq(vim.tbl_map(function(t)
+    return t.group .. " " .. t.name
+  end, require("aedi.gradle").from_json(json)), {
+    "Application app:bootRun",
+    "Build build",
+    "Build app:build",
+    "Verification app:test",
+    "Openapi openApi",
+    "Other prepareKotlinIdeaImport",
+  })
+  assert(vim.uv.fs_stat(require("aedi.gradle").init_script()), "the init script ships with the plugin")
+end)
+test("gradle: fingerprint follows build files", function()
+  local gradle = require("aedi.gradle")
+  local root = tmp .. "/fp"
+  write(root .. "/settings.gradle.kts", "a")
+  write(root .. "/sub/build.gradle.kts", "b")
+  local a = gradle.fingerprint(root)
+  eq(gradle.fingerprint(root), a)
+  write(root .. "/sub/build.gradle.kts", "bb")
+  assert(gradle.fingerprint(root) ~= a)
+end)
+
 vim.fn.delete(tmp, "rf")
 print(("%d passed, %d failed"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)

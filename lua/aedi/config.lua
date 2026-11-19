@@ -26,6 +26,10 @@ M.defaults = {
   -- { pattern = <vim regex>, hl = <group or nvim_set_hl attributes>, order = n }
   ---@type table<string, aedi.GrepRule|false>
   grep = {},
+  gradle = {
+    -- Index the project's Gradle tasks in the background (lua/aedi/gradle.lua).
+    index = true,
+  },
   debug = {
     -- The Debug panel, dap-ui's gutter cleanup and its framed value popup.
     enabled = true,

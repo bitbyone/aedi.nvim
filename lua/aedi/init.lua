@@ -16,6 +16,12 @@ local function console()
   return require("aedi.console")
 end
 
+--- Pick one of the project's Gradle tasks (indexed in the background) and
+--- run it, or type a task line of your own.
+function M.gradle()
+  require("aedi.gradle").pick()
+end
+
 --- Pick a configuration and run it.
 function M.pick()
   require("aedi.picker").pick()
@@ -139,6 +145,9 @@ function M.setup(opts)
   require("aedi.hints").setup()
   require("aedi.editor").setup()
   require("aedi.grep").setup()
+  if require("aedi.config").options.gradle.index then
+    require("aedi.gradle").setup()
+  end
   console().setup()
   local cmd = vim.api.nvim_create_user_command
   cmd("AediRun", function(a)
@@ -155,6 +164,13 @@ function M.setup(opts)
       M.pick_debug()
     end
   end, { nargs = "?", complete = complete_names, desc = "Debug a configuration" })
+  cmd("AediGradle", function(a)
+    if a.args ~= "" then
+      require("aedi.gradle").run(a.args)
+    else
+      M.gradle()
+    end
+  end, { nargs = "*", desc = "Run a Gradle task" })
   cmd("AediRerun", M.rerun, { desc = "Run the last configuration again" })
   cmd("AediEdit", function(a)
     M.edit(a.args)

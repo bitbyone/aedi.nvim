@@ -1,0 +1,27 @@
+// aedi.nvim's Gradle task index (lua/aedi/gradle.lua): every task of every
+// project, as JSON, so nothing has to parse `gradle tasks` text.
+//
+// Passed only to aedi's own background run:
+//   gradlew help -q --no-configuration-cache -I aedi-tasks.gradle -Paedi.tasksOut=<file>
+// Without -Paedi.tasksOut it does nothing. It reads the model once the
+// projects are evaluated, which is why the configuration cache is off for that
+// run: a cached configuration would skip this listener.
+//
+// Each entry: { "name": "app:bootRun" (root tasks bare, as `gradle tasks` shows
+// them), "group": "application" or "", "description": "..." }.
+
+import groovy.json.JsonOutput
+
+gradle.projectsEvaluated { g ->
+    def out = g.startParameter.projectProperties["aedi.tasksOut"]
+    if (!out) return
+    def root = g.rootProject
+    def tasks = []
+    root.allprojects.each { p ->
+        def prefix = p == root ? "" : p.path.substring(1) + ":"
+        p.tasks.each { t ->
+            tasks << [name: prefix + t.name, group: t.group ?: "", description: t.description ?: ""]
+        }
+    }
+    new File(out).text = JsonOutput.toJson(tasks)
+}

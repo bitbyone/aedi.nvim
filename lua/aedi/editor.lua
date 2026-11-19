@@ -183,7 +183,7 @@ local function decorate(state)
     local right
     if CHOICE[f] then
       right = { { "Enter", "AediFormKey" }, { " change", "AediFormMuted" } }
-    elseif f == "main" and i == cursor then
+    elseif (f == "main" or f == "tasks") and i == cursor then
       right = { { "Enter", "AediFormKey" }, { " pick", "AediFormMuted" } }
     elseif f == "profiles" then
       local avail = spring.profiles(state.root, state.values.module ~= "" and state.values.module or state.apps[1])
@@ -396,6 +396,15 @@ local function enter(state, insert)
   elseif f == "main" then
     vim.cmd("stopinsert")
     return choose_main(state)
+  elseif f == "tasks" and select(2, require("aedi.detect").build_tool(state.root)) == "gradle" then
+    vim.cmd("stopinsert")
+    return require("aedi.gradle").pick({
+      on_choose = function(task)
+        state.values.tasks = task
+        render(state)
+        goto_field(state, "tasks")
+      end,
+    })
   end
   if insert then
     -- next field
