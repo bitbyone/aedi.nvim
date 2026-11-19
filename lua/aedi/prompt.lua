@@ -237,14 +237,14 @@ function M.open(spec)
   k("<CR>", submit)
   k("<Esc>", close)
   k("<C-c>", close)
-  -- <D-j> / <D-k> as the pickers have them: the global insert-mode <D-k>
-  -- sends <Up> without remapping, which would not reach the maps below
-  for _, lhs in ipairs({ "<Down>", "<C-n>", "<Tab>", "<C-j>", "<D-j>" }) do
+  -- the keys come from setup({ prompt = { next = ..., prev = ... } })
+  local keys = require("aedi.config").options.prompt
+  for _, lhs in ipairs(keys.next) do
     k(lhs, function()
       move(1)
     end)
   end
-  for _, lhs in ipairs({ "<Up>", "<C-p>", "<S-Tab>", "<C-k>", "<D-k>" }) do
+  for _, lhs in ipairs(keys.prev) do
     k(lhs, function()
       move(-1)
     end)

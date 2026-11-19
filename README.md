@@ -122,7 +122,7 @@ description, the way IntelliJ's Gradle tool window lists them.
 - **Typing** filters the suggestions fuzzily on the first word, so
   `test --tests '*Foo'` still offers `test`. Nothing gets selected, so Enter
   runs exactly what you typed.
-- **`↓` / `↑`** (also `Ctrl-N` / `Ctrl-P`, `Tab`) put the suggestion under
+- **`↓` / `↑`** (also `Ctrl-N` / `Ctrl-P`, `Tab`; `prompt.next` / `prompt.prev` in setup) put the suggestion under
   the cursor into the input, where you can run it or edit it. The list stays
   as your typing left it.
 - **Enter** runs the input in the Run panel and remembers it as a recent line
@@ -236,6 +236,7 @@ require("aedi").setup({
   detect = true,                               -- offer the project's own configurations
   detectors = {},                              -- extra: function(root) -> configurations
   console = { height = 15 },
+  prompt = { next = { "<Down>", "<C-n>", "<Tab>" }, prev = { "<Up>", "<C-p>", "<S-Tab>" } },
   debug = { enabled = true },
   on_panel = nil,   -- function(win): a window aedi draws its own winbar in
   ignore_buf = nil, -- function(buf): a split buffer that is not code (focus skips it)

@@ -29,6 +29,12 @@ M.defaults = {
   -- Run in the project's mise environment (lua/aedi/env.lua) when it has a
   -- mise config and mise is installed.
   mise = true,
+  -- The command prompt (Gradle tasks): keys that move through the
+  -- suggestions, putting the one under the cursor into the input.
+  prompt = {
+    next = { "<Down>", "<C-n>", "<Tab>" },
+    prev = { "<Up>", "<C-p>", "<S-Tab>" },
+  },
   gradle = {
     -- Index the project's Gradle tasks in the background (lua/aedi/gradle.lua).
     index = true,
