@@ -26,6 +26,9 @@ M.defaults = {
   -- { pattern = <vim regex>, hl = <group or nvim_set_hl attributes>, order = n }
   ---@type table<string, aedi.GrepRule|false>
   grep = {},
+  -- Run in the project's mise environment (lua/aedi/env.lua) when it has a
+  -- mise config and mise is installed.
+  mise = true,
   gradle = {
     -- Index the project's Gradle tasks in the background (lua/aedi/gradle.lua).
     index = true,

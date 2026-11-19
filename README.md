@@ -117,6 +117,24 @@ the build files, so a build that has not changed is not indexed again. In the
 form of a Gradle configuration, `Enter` on Tasks picks from the same list.
 `setup({ gradle = { index = false } })` turns indexing off.
 
+## mise
+
+A project with a [mise](https://mise.jdx.dev) config (`mise.toml`,
+`.mise.toml`, `.tool-versions`, …) runs in the environment mise sets for it
+(`mise env --json` in the project root). That covers `JAVA_HOME` and `PATH`
+for the JDK the project pins, among others. It applies even when Neovim was
+not started from a shell where mise had already activated that directory.
+
+It applies to:
+- the background Gradle index;
+- Gradle and Shell command configurations, whose own `env` still wins.
+
+Application and Spring Boot use the JDK the IntelliJ server chose for the
+project.
+
+The form's `RUNS` lines say when mise's environment is used. It does nothing
+without `mise` on `PATH`; `setup({ mise = false })` turns it off.
+
 ## Run panel
 
 | key (normal mode) | |

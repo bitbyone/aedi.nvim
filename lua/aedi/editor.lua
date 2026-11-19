@@ -219,6 +219,13 @@ local function decorate(state)
       virt[#virt + 1] = { { j == 1 and label or pad, "AediFormLabel" }, { part, "AediFormCommand" } }
     end
     virt[#virt + 1] = { { pad, "AediFormLabel" }, { "in " .. short(launch.cwd), "AediFormMuted" } }
+    local mise = not launch.intellij and require("aedi.env").project(state.root)
+    if mise then
+      virt[#virt + 1] = {
+        { pad, "AediFormLabel" },
+        { "with mise's environment" .. (mise.JAVA_HOME and (" · JAVA_HOME " .. short(mise.JAVA_HOME)) or ""), "AediFormMuted" },
+      }
+    end
   end
   vim.api.nvim_buf_set_extmark(buf, ns, #fields - 1, 0, { virt_lines = virt })
   state.extra = #virt

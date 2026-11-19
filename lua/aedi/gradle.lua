@@ -162,7 +162,8 @@ function M.refresh(root, done)
   if vim.fn.executable("nice") == 1 then
     cmd = vim.list_extend({ "nice", "-n", "10" }, cmd)
   end
-  vim.system(cmd, { cwd = root, text = true }, function(res)
+  -- the JDK mise pins for the project, when it does
+  vim.system(cmd, { cwd = root, text = true, env = require("aedi.env").project(root) }, function(res)
     vim.schedule(function()
       s.running = false
       local f_out = io.open(out, "r")

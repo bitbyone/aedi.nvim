@@ -523,7 +523,9 @@ function M.start(c, opts)
     run.job = vim.fn.jobstart({ vim.o.shell, "-c", header .. line }, {
       term = true,
       cwd = cwd,
-      env = launch.env,
+      -- the project's mise environment (JAVA_HOME, PATH, ...), then the
+      -- configuration's own
+      env = require("aedi.env").merge(util.root(), launch.env),
       on_exit = function(_, code)
         run.code = code
         run.ended = vim.uv.now()

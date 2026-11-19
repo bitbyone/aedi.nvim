@@ -293,6 +293,25 @@ test("gradle: fingerprint follows build files", function()
   assert(gradle.fingerprint(root) ~= a)
 end)
 
+test("env: mise's environment under the configuration's", function()
+  local bin = tmp .. "/bin"
+  write(bin .. "/mise", "#!/bin/sh\necho \"called\" >> " .. tmp .. "/mise.calls\nprintf '{\"JAVA_HOME\":\"/jdk/21\",\"FOO\":\"mise\"}'\n")
+  vim.fn.setfperm(bin .. "/mise", "rwxr-xr-x")
+  local path = vim.env.PATH
+  vim.env.PATH = bin .. ":" .. path
+  local env = require("aedi.env")
+  env.reset()
+  local root = tmp .. "/miseproj"
+  write(root .. "/build.txt", "")
+  eq(env.project(root), nil, "no mise config, no mise")
+  write(root .. "/mise.toml", "[tools]\njava = '21'\n")
+  eq(env.merge(root, { FOO = "mine" }), { JAVA_HOME = "/jdk/21", FOO = "mine" })
+  env.project(root)
+  eq(#vim.fn.readfile(tmp .. "/mise.calls"), 1, "asked once while the config is unchanged")
+  vim.env.PATH = path
+  env.reset()
+end)
+
 vim.fn.delete(tmp, "rf")
 print(("%d passed, %d failed"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)
