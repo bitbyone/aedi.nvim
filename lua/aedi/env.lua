@@ -6,7 +6,8 @@
 -- changed directory since, would not. So aedi asks mise itself -- `mise env
 -- --json` in the project root -- and runs with that: the background Gradle
 -- index, and Gradle and shell configurations in the Run panel (their own
--- `env` still wins). IntelliJ launches use the JDK the IntelliJ server chose.
+-- `env` still wins), and Application / Spring Boot launches through the
+-- IntelliJ server (whose JVM is the one the server chose).
 --
 -- Nothing happens without mise on PATH or a config for the project; off with
 -- `setup({ mise = false })`. Kept per project until a config file changes.

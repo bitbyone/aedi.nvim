@@ -475,6 +475,8 @@ function M.start(c, opts)
   -- panel (lua/aedi/integrations/intellij_lsp.lua), a debug session the
   -- Debug panel.
   if launch.intellij then
+    -- the program's environment: the project's mise, then the configuration's
+    launch.intellij.env = require("aedi.env").merge(util.root(), launch.intellij.env)
     if require("aedi.jvm").launch(launch.intellij, debug) then
       require("aedi.store").set_last(c)
       M.last_launch = { config = vim.deepcopy(c), debug = debug }

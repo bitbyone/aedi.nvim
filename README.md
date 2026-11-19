@@ -129,8 +129,11 @@ It applies to:
 - the background Gradle index;
 - Gradle and Shell command configurations, whose own `env` still wins.
 
-Application and Spring Boot use the JDK the IntelliJ server chose for the
-project.
+Application and Spring Boot launches get the same environment. The JVM that
+runs them is the one the IntelliJ server chose. To make that JDK the mise
+one, hand the server mise's `JAVA_HOME`; the
+[author's config](https://github.com/bitbyone/dotfiles) passes it as the
+project's `env` and as `defaultSdk`.
 
 The form's `RUNS` lines say when mise's environment is used. It does nothing
 without `mise` on `PATH`; `setup({ mise = false })` turns it off.
