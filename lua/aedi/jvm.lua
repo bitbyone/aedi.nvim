@@ -119,6 +119,15 @@ function M.client(file)
   return vim.lsp.get_clients({ name = require("intellij-lsp.client").NAME })[1]
 end
 
+local marks = 0
+
+--- A mark for the next launch: unique to this Neovim and this moment.
+---@return string
+function M.next_mark()
+  marks = marks + 1
+  return ("%d-%d-%d"):format(vim.fn.getpid(), os.time(), marks)
+end
+
 --- Launch through the IntelliJ server: built by the project's build tool,
 --- run (or debugged) as IntelliJ's Application configuration would.
 ---@param spec { name: string, mainClass: string, file: string, args?: string[], vmArgs?: string[], env?: table<string,string>, cwd?: string }
@@ -135,7 +144,10 @@ function M.launch(spec, debug)
     mainClass = spec.mainClass,
     file = spec.file,
     args = spec.args and #spec.args > 0 and spec.args or nil,
-    vmArgs = spec.vmArgs and #spec.vmArgs > 0 and spec.vmArgs or nil,
+    -- A mark only this launch's JVM carries, so its command line is found
+    -- for certain (lua/aedi/jvmcmd.lua) even with the same class running
+    -- twice.
+    vmArgs = vim.list_extend(vim.deepcopy(spec.vmArgs or {}), { "-Daedi.launch=" .. M.next_mark() }),
     env = spec.env and next(spec.env) and spec.env or nil,
     cwd = spec.cwd,
     noDebug = not debug,

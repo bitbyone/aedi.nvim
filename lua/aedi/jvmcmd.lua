@@ -54,15 +54,37 @@ function M.shorten(cmd)
   return table.concat(words, " ")
 end
 
---- Watch for a new JVM running `main` (one not among `before`), up to
---- `timeout` ms: a launch builds first, which takes a while. `found` gets its
---- command line; `stop()` gives up early.
----@param main string
----@param before table<integer, string>
----@param found fun(cmd: string, pid: integer)
+--- The mark (`-Daedi.launch=…`) a launch's JVM carries, if any.
+---@param vm_args? string[]
+---@return string?
+function M.mark_of(vm_args)
+  for _, a in ipairs(vm_args or {}) do
+    local m = a:match("^%-Daedi%.launch=(.+)$")
+    if m then
+      return m
+    end
+  end
+end
+
+--- Does `cmd` carry `mark`?
+function M.carries(cmd, mark)
+  for word in cmd:gmatch("%S+") do
+    if word == "-Daedi.launch=" .. mark then
+      return true
+    end
+  end
+  return false
+end
+
+--- Watch for the launch's JVM, up to `timeout` ms (it starts after the
+--- build): by its mark when it has one -- certain -- else the first new
+--- process (not among `before`) running `main`. `found` gets the command line
+--- and whether it was matched by the mark. `stop()` gives up early.
+---@param want { mark?: string, main: string, before?: table<integer, string> }
+---@param found fun(cmd: string, by_mark: boolean)
 ---@param timeout? integer
 ---@return fun() stop
-function M.watch(main, before, found, timeout)
+function M.watch(want, found, timeout)
   local timer = vim.uv.new_timer()
   local started = vim.uv.now()
   local function stop()
@@ -71,19 +93,48 @@ function M.watch(main, before, found, timeout)
       timer:close()
     end
   end
-  timer:start(200, 200, vim.schedule_wrap(function()
+  timer:start(200, 250, vim.schedule_wrap(function()
     if vim.uv.now() - started > (timeout or 180000) then
       return stop()
     end
     for pid, cmd in pairs(M.processes()) do
-      if not before[pid] and M.runs(cmd, main) then
+      if want.mark then
+        if M.carries(cmd, want.mark) and M.runs(cmd, want.main) then
+          stop()
+          return found(cmd, true)
+        end
+      elseif not (want.before or {})[pid] and M.runs(cmd, want.main) then
         stop()
-        found(cmd, pid)
-        return
+        return found(cmd, false)
       end
     end
   end))
   return stop
+end
+
+--- A JVM command line in parts: java, VM options, classpath, main, args.
+---@param cmd string
+---@param main string
+---@return { java: string, vm: string[], classpath: string[], main: string, args: string[] }
+function M.parse(cmd, main)
+  local words = vim.split(cmd, " ", { plain = true, trimempty = true })
+  local out = { java = words[1], vm = {}, classpath = {}, main = main, args = {} }
+  local i, past_main = 2, false
+  while i <= #words do
+    local w = words[i]
+    if past_main then
+      out.args[#out.args + 1] = w
+    elseif w == main then
+      past_main = true
+    elseif (w == "-cp" or w == "-classpath" or w == "--class-path") and words[i + 1] then
+      out.classpath = vim.split(words[i + 1], ":", { plain = true, trimempty = true })
+      i = i + 1
+    elseif not w:match("^%-Daedi%.launch=") then
+      out.vm[#out.vm + 1] = w
+    end
+    i = i + 1
+  end
+  return out
 end
 
 return M

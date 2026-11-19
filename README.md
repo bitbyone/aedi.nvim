@@ -65,22 +65,21 @@ program runs (or is debugged) as IntelliJ's Application configuration would
 run it. The IntelliJ server has to be running. Debug opens the Debug panel.
 `Ctrl-D` in the list, `:AediDebug` and `d` in the Run panel debug.
 
-IntelliJ prints the command line at the top of a run, and the output here
-does too:
+`c` in the Run panel shows what the current tab runs, in a popup. For an
+IntelliJ launch that is the JVM's actual command line:
+- `java`, so which JDK ran;
+- every VM option, one per line;
+- the main class and its arguments;
+- the classpath, entry by entry;
+- the environment.
 
-```
-▶ Main · Run · x.Main · JAVA_HOME ~/.local/share/mise/installs/java/temurin-25.0.5+8.0.LTS
-/…/temurin-25.0.5+8.0.LTS/bin/java -Dwho=world -Xmx256m -Dfile.encoding=UTF-8 -cp <42 entries> x.Main a b
-```
+`y` copies it.
 
-- The first line is the launch.
-- The second is the JVM's actual command line: which `java`, so which JDK,
-  every VM option and the arguments. The server starts that JVM and does not
-  say how, so the line is found in `ps` once the build is through. It is the
-  new `java` process running the main class, with the classpath shortened.
-
-A program that ends within a fraction of a second can finish before it is
-seen.
+The server starts that JVM itself and does not say how, so aedi finds it in
+`ps` once the build is through. Each aedi launch gives its JVM a mark of its
+own (`-Daedi.launch=…`), so two runs of the same class are never confused. A
+Run lens launch carries no mark and is matched by its main class, as the
+popup says. Nothing is written into the output.
 
 Main classes (`fun main`, `static void main` under `src/main`) are offered
 as Application configurations.
@@ -164,6 +163,7 @@ without `mise` on `PATH`; `setup({ mise = false })` turns it off.
 | `x` | close the tab; it stops the process if it is still running |
 | `e` | edit the configuration, or save an ad-hoc command as one |
 | `Enter` | go to the file or stack frame under the cursor |
+| `c` | the command line it runs, in full (`y` copies it) |
 | `Tab` / `Shift-Tab` | next / previous tab |
 | `q` | hide the panel |
 | `<Esc>` | go back to the editor |

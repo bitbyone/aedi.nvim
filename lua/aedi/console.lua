@@ -99,6 +99,7 @@ local HINT = {
   { "Ctrl-C", "stop" },
   { "x", "close tab" },
   { "e", "edit" },
+  { "c", "command" },
   { "Enter", "go to source" },
   { "q", "hide" },
 }
@@ -386,6 +387,9 @@ local function map(buf, run)
   k("<C-c>", function()
     M.stop(run)
   end, "Stop (again: kill)")
+  k("c", function()
+    require("aedi.cmdview").open(run)
+  end, "The command line it runs")
   k("d", function()
     local c = run.external and M.last_launch and M.last_launch.config or run.config
     M.start(c, { debug = true })
@@ -509,6 +513,13 @@ function M.start(c, opts)
   vim.bo[buf].bufhidden = "hide"
   ---@type aedi.Run
   local run = { id = next_id, config = vim.deepcopy(c), buf = buf, cwd = cwd, started = vim.uv.now() }
+  local mise = require("aedi.env").project(util.root())
+  run.command = {
+    cmd = launch.cmd,
+    cwd = cwd,
+    env = launch.env,
+    mise = mise and ("environment of the project" .. (mise.JAVA_HOME and (" · JAVA_HOME " .. vim.fn.fnamemodify(mise.JAVA_HOME, ":~")) or "")) or nil,
+  }
   if slot then
     M.runs[slot] = run
   else

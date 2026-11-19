@@ -319,6 +319,16 @@ test("jvm command line: found and shortened", function()
   assert(not j.runs("/jdk/bin/java -cp a.jar x.MainKt", "x.Main"))
   eq(j.shorten("/jdk/bin/java -Xmx1g -cp a.jar:b.jar:c.jar x.Main --p=1"), "/jdk/bin/java -Xmx1g -cp <3 entries> x.Main --p=1")
   assert(next(j.processes()), "ps lists processes")
+  assert(j.carries("/jdk/bin/java -Daedi.launch=1-2-3 x.Main", "1-2-3"))
+  assert(not j.carries("/jdk/bin/java -Daedi.launch=1-2-33 x.Main", "1-2-3"))
+  eq(j.mark_of({ "-Xmx1g", "-Daedi.launch=9-9-9" }), "9-9-9")
+  eq(j.parse("/jdk/bin/java -Xmx1g -Daedi.launch=1 -cp a.jar:b.jar x.Main --p=1 two", "x.Main"), {
+    java = "/jdk/bin/java",
+    vm = { "-Xmx1g" },
+    classpath = { "a.jar", "b.jar" },
+    main = "x.Main",
+    args = { "--p=1", "two" },
+  })
 end)
 
 vim.fn.delete(tmp, "rf")

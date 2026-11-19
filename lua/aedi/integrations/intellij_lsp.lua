@@ -65,7 +65,6 @@ function M.setup()
   local dap = require("dap")
   ---@type table<integer, fun()> the JVM watch of each session
   local watching = {}
-  vim.api.nvim_set_hl(0, "AediLaunch", { link = "Comment", default = true })
   local function ours(session)
     return session and session.config and session.config.type == "intellij_jvm"
   end
@@ -83,20 +82,18 @@ function M.setup()
       name = session.config.mainClass and session.config.mainClass:match("[^.]+$") or session.config.name
     end
     console.set_state(ensure(name), "running")
-    -- What runs, as IntelliJ prints it first: the launch, then -- once the
-    -- build is through and the JVM is up -- its actual command line.
+    -- The JVM's actual command line, kept on the tab for `c` in the Run
+    -- panel (nothing is written into the output): found once the build is
+    -- through and the JVM is up.
     local main = session.config.mainClass
+    tab.command = nil
     if main then
       local jvmcmd = require("aedi.jvmcmd")
-      local env = session.config.env or {}
-      local head = ("▶ %s · %s · %s"):format(name or main, session.config.noDebug and "Run" or "Debug", main)
-      if env.JAVA_HOME then
-        head = head .. " · JAVA_HOME " .. vim.fn.fnamemodify(env.JAVA_HOME, ":~")
-      end
-      output.append(head, "AediLaunch")
-      local before = jvmcmd.processes()
-      watching[session.id] = jvmcmd.watch(main, before, function(cmd)
-        output.append(jvmcmd.shorten(cmd), "AediLaunch")
+      local mark = jvmcmd.mark_of(session.config.vmArgs)
+      local this = tab
+      this.command = { pending = true, main = main, env = session.config.env, debug = not session.config.noDebug }
+      watching[session.id] = jvmcmd.watch({ mark = mark, main = main, before = not mark and jvmcmd.processes() or nil }, function(cmd, by_mark)
+        this.command = { cmd = cmd, main = main, env = session.config.env, by_mark = by_mark, debug = not session.config.noDebug }
       end)
     end
   end
