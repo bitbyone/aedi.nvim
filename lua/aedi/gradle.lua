@@ -347,7 +347,6 @@ function M.pick(opts)
     end,
     hints = {
       { "Enter", opts.on_choose and "choose" or "run" },
-      { "↓↑", "pick into the input" },
       { "Ctrl-X", "forget a recent" },
       { "Esc", "close" },
     },

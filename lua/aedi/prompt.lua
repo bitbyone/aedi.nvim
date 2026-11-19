@@ -35,6 +35,16 @@ local function define()
   local function link(a, b)
     vim.api.nvim_set_hl(0, a, { link = b, default = true })
   end
+  -- the suggestions on the dark ground of a float's border (the darker
+  -- pickers' look), the input on the float's own
+  local function get(name)
+    local ok, h = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+    return ok and h or {}
+  end
+  vim.api.nvim_set_hl(0, "AediPromptList", {
+    fg = get("NormalFloat").fg or get("Normal").fg,
+    bg = get("FloatBorder").bg or get("NormalFloat").bg,
+  })
   link("AediPromptSel", "PmenuSel")
   link("AediPromptMatch", "SnacksPickerMatch")
   link("AediPromptRecent", "AediFormKey")
@@ -67,7 +77,6 @@ function M.open(spec)
     border = { "├", "─", "┤", "│", "╯", "─", "╰", "│" },
     footer = require("aedi.hints").chunks(spec.hints or {
       { "Enter", "run" },
-      { "↓↑", "choose" },
       { "Esc", "close" },
     }),
     footer_pos = "left",
@@ -85,6 +94,8 @@ function M.open(spec)
     title_pos = "left",
     zindex = 61,
   })
+  -- the suggestions on a darker ground than the input
+  vim.wo[list_win].winhighlight = "Normal:AediPromptList,NormalFloat:AediPromptList"
   for _, w in ipairs({ in_win, list_win }) do
     local wo = vim.wo[w]
     wo.number, wo.relativenumber, wo.signcolumn = false, false, "no"
@@ -226,12 +237,14 @@ function M.open(spec)
   k("<CR>", submit)
   k("<Esc>", close)
   k("<C-c>", close)
-  for _, lhs in ipairs({ "<Down>", "<C-n>", "<Tab>", "<C-j>" }) do
+  -- <D-j> / <D-k> as the pickers have them: the global insert-mode <D-k>
+  -- sends <Up> without remapping, which would not reach the maps below
+  for _, lhs in ipairs({ "<Down>", "<C-n>", "<Tab>", "<C-j>", "<D-j>" }) do
     k(lhs, function()
       move(1)
     end)
   end
-  for _, lhs in ipairs({ "<Up>", "<C-p>", "<S-Tab>", "<C-k>" }) do
+  for _, lhs in ipairs({ "<Up>", "<C-p>", "<S-Tab>", "<C-k>", "<D-k>" }) do
     k(lhs, function()
       move(-1)
     end)
