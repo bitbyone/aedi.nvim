@@ -114,13 +114,20 @@ working directory by default). Nothing is written into the project.
 
 ## Gradle tasks
 
-`:AediGradle` (`require("aedi").gradle()`) lists every task of every project,
-with its group and description, the way IntelliJ's Gradle tool window does.
+`:AediGradle` (`require("aedi").gradle()`) is a command prompt with
+suggestions, like a shell's history and completion. The suggestions are your
+recent task lines and every task of every project, with its group and
+description, the way IntelliJ's Gradle tool window lists them.
 
-| key | |
-| --- | --- |
-| `Enter` | run the task in the Run panel; text that matches no task (`test --tests '*UserTest'`) runs as typed |
-| `Ctrl-E` | put the task into the input, so you can add arguments |
+- **Typing** filters the suggestions fuzzily on the first word, so
+  `test --tests '*Foo'` still offers `test`. Nothing gets selected, so Enter
+  runs exactly what you typed.
+- **`↓` / `↑`** (also `Ctrl-N` / `Ctrl-P`, `Tab`) put the suggestion under
+  the cursor into the input, where you can run it or edit it. The list stays
+  as your typing left it.
+- **Enter** runs the input in the Run panel and remembers it as a recent line
+  for the project.
+- **`Ctrl-X`** forgets a recent line.
 
 The list comes from a background run of `./gradlew help`. It runs at low
 priority with the plugin's init script (`gradle/aedi-tasks.gradle`), which

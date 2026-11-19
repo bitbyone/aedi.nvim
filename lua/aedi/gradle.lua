@@ -214,7 +214,102 @@ function M.run(text)
   require("aedi.console").start({ name = "gradle " .. text, type = "gradle", tasks = text })
 end
 
----@param opts? { on_choose?: fun(task: string) } with on_choose: give the task back instead of running it
+-- ---------------------------------------------------------------------------
+-- Recent command lines
+-- ---------------------------------------------------------------------------
+
+local MAX_RECENT = 30
+
+local function recent_file(root)
+  return dir() .. "/" .. vim.fn.sha256(root):sub(1, 16) .. ".recent.json"
+end
+
+--- The task lines run in `root`, the last first.
+---@param root string
+---@return string[]
+function M.recent(root)
+  local f = io.open(recent_file(root), "r")
+  if not f then
+    return {}
+  end
+  local ok, list = pcall(vim.json.decode, f:read("*a"))
+  f:close()
+  return ok and type(list) == "table" and list or {}
+end
+
+local function save_recent(root, list)
+  vim.fn.mkdir(dir(), "p")
+  local f = io.open(recent_file(root), "w")
+  if f then
+    f:write(vim.json.encode(list))
+    f:close()
+  end
+end
+
+--- Put `text` first among the recent task lines of `root`.
+---@param root string
+---@param text string
+function M.remember(root, text)
+  local list = { text }
+  for _, t in ipairs(M.recent(root)) do
+    if t ~= text and #list < MAX_RECENT then
+      list[#list + 1] = t
+    end
+  end
+  save_recent(root, list)
+end
+
+---@param root string
+---@param text string
+function M.forget(root, text)
+  save_recent(root, vim.tbl_filter(function(t)
+    return t ~= text
+  end, M.recent(root)))
+end
+
+--- The suggestions for `query`: recent task lines (matched on the whole
+--- line), then the indexed tasks (matched on its first word, so `test --tests
+--- …` still offers `test`), best match first.
+---@param root string
+---@param query string
+---@return aedi.PromptItem[], integer total
+function M.suggest(root, query)
+  local recent = M.recent(root)
+  local tasks = M.cached(root) or {}
+  local out = {}
+  local q = vim.trim(query)
+  if q == "" then
+    for _, r in ipairs(recent) do
+      out[#out + 1] = { text = r, cols = { "Recent" }, recent = true }
+    end
+    for _, t in ipairs(tasks) do
+      out[#out + 1] = { text = t.name, cols = { t.group, t.desc } }
+    end
+    return out, #recent + #tasks
+  end
+  local matched, pos = unpack(vim.fn.matchfuzzypos(recent, q))
+  for i, r in ipairs(matched) do
+    out[#out + 1] = { text = r, cols = { "Recent" }, recent = true, pos = pos[i] }
+  end
+  local by_name = {}
+  local names = {}
+  for _, t in ipairs(tasks) do
+    by_name[t.name] = t
+    names[#names + 1] = t.name
+  end
+  local word = q:match("^%S+")
+  local tm, tp = unpack(vim.fn.matchfuzzypos(names, word))
+  for i, name in ipairs(tm) do
+    local t = by_name[name]
+    out[#out + 1] = { text = name, cols = { t.group, t.desc }, pos = tp[i] }
+  end
+  return out, #recent + #tasks
+end
+
+--- The task prompt: type a task line (`build -x test`) or choose one of the
+--- project's tasks and recent lines; Enter runs it (or, with `on_choose`,
+--- gives it back). What runs is remembered as recent.
+---@param opts? { on_choose?: fun(task: string), text?: string }
 function M.pick(opts)
   opts = opts or {}
   local root = require("aedi.util").root()
@@ -224,101 +319,44 @@ function M.pick(opts)
     return
   end
   M.ensure(root)
-  if not (rawget(_G, "Snacks") and Snacks.picker) then
-    vim.ui.input({ prompt = "Gradle: " }, function(text)
-      if text then
-        if opts.on_choose then
-          opts.on_choose(text)
-        else
-          M.run(text)
-        end
-      end
-    end)
-    return
-  end
-  local width = { name = 0, group = 0 }
   local function title()
     local s = M.status(root)
-    local tasks = M.cached(root)
     if s.running then
-      return tasks and "Gradle tasks · reindexing…" or "Gradle tasks · indexing…"
+      return M.cached(root) and "Gradle tasks · reindexing…" or "Gradle tasks · indexing…"
     elseif s.error then
       return "Gradle tasks · index failed: " .. s.error
     end
     return "Gradle tasks"
   end
-  local picker
-  -- on a plain float's darker ground, like the Run list
-  local grounds = require("aedi.picker").grounds()
-  picker = Snacks.picker.pick({
+  local handle = require("aedi.prompt").open({
     title = title(),
-    on_show = function(p)
-      require("aedi.picker").darken(p, grounds)
+    text = opts.text,
+    items = function(query)
+      return M.suggest(root, query)
     end,
-    layout = {
-      preset = "select",
-      layout = {
-        title_pos = "left",
-        footer = require("aedi.hints").chunks({
-          { "Enter", opts.on_choose and "choose" or "run" },
-          { "Ctrl-E", "edit" },
-        }, "float"),
-        footer_pos = "left",
-      },
-    },
-    finder = function()
-      local items = {}
-      for _, t in ipairs(M.cached(root) or {}) do
-        width.name = math.max(width.name, #t.name)
-        width.group = math.max(width.group, #t.group)
-        items[#items + 1] = { text = t.name .. " " .. t.group .. " " .. t.desc, task = t }
-      end
-      return items
-    end,
-    format = function(item)
-      local t = item.task
-      return {
-        { ("%-" .. math.min(width.name, 48) .. "s"):format(t.name), "SnacksPickerFile" },
-        { "  " },
-        { ("%-" .. width.group .. "s"):format(t.group), "AediFormMuted" },
-        { "  " },
-        { t.desc, "AediFormPlaceholder" },
-      }
-    end,
-    confirm = function(p, item)
-      -- arguments typed after a task make it a command line of its own
-      local typed = vim.trim(p.input:get() or "")
-      local text = (typed:find("%s") or not item) and typed or item.task.name
-      p:close()
+    submit = function(text)
+      M.remember(root, text)
       if opts.on_choose then
         opts.on_choose(text)
       else
         M.run(text)
       end
     end,
-    actions = {
-      aedi_gradle_edit = function(p, item)
-        if item then
-          p.input:set(item.task.name .. " ")
-        end
-      end,
-    },
-    win = {
-      input = {
-        keys = {
-          ["<c-e>"] = { "aedi_gradle_edit", mode = { "n", "i" } },
-        },
-      },
+    forget = function(item)
+      M.forget(root, item.text)
+    end,
+    hints = {
+      { "Enter", opts.on_choose and "choose" or "run" },
+      { "↓↑", "pick into the input" },
+      { "Ctrl-X", "forget a recent" },
+      { "Esc", "close" },
     },
   })
   -- tasks arriving while it is open
   if M.status(root).running then
     M.refresh(root, function()
-      if picker and not picker.closed then
-        picker.title = title()
-        picker:find({ refresh = true })
-        pcall(picker.update_titles, picker)
-      end
+      handle.title(title())
+      handle.refresh()
     end)
   end
 end
