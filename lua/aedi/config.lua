@@ -32,8 +32,10 @@ M.defaults = {
   -- The command prompt (Gradle tasks): keys that move through the
   -- suggestions, putting the one under the cursor into the input.
   prompt = {
-    next = { "<Down>", "<C-n>", "<Tab>" },
-    prev = { "<Up>", "<C-p>", "<S-Tab>" },
+    -- Ctrl-J / Ctrl-K as in snacks' pickers; unmapped, Ctrl-J would put a
+    -- line break into the input
+    next = { "<Down>", "<C-n>", "<Tab>", "<C-j>" },
+    prev = { "<Up>", "<C-p>", "<S-Tab>", "<C-k>" },
   },
   gradle = {
     -- Index the project's Gradle tasks in the background (lua/aedi/gradle.lua).
