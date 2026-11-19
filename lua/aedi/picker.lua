@@ -78,9 +78,14 @@ local function get(name)
   return ok and h or {}
 end
 
+--- The plain float's grounds, taken before a picker opens (`darken`).
+function M.grounds()
+  return { body = get("NormalFloat").bg or get("Normal").bg, edge = get("FloatBorder").bg }
+end
+
 --- `grounds` are taken before the picker opens: while it is up, snacks
 --- shows NormalFloat / FloatBorder in its own colours.
-local function darken(picker, grounds)
+function M.darken(picker, grounds)
   local body, edge = grounds.body, grounds.edge
   local function dark(group)
     local name = "AediDark_" .. group
@@ -110,7 +115,7 @@ end
 ---@param opts? { debug?: boolean }
 local function snacks_pick(opts)
   local debug = opts and opts.debug
-  local grounds = { body = get("NormalFloat").bg or get("Normal").bg, edge = get("FloatBorder").bg }
+  local grounds = M.grounds()
   local console = require("aedi.console")
   local width = { name = 0, type = 0, profiles = 0 }
   local function make_items()
@@ -140,7 +145,7 @@ local function snacks_pick(opts)
   Snacks.picker.pick({
     title = debug and "Debug" or "Run",
     on_show = function(picker)
-      darken(picker, grounds)
+      M.darken(picker, grounds)
     end,
     layout = {
       preset = "select",

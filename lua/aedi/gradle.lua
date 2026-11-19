@@ -248,8 +248,13 @@ function M.pick(opts)
     return "Gradle tasks"
   end
   local picker
+  -- on a plain float's darker ground, like the Run list
+  local grounds = require("aedi.picker").grounds()
   picker = Snacks.picker.pick({
     title = title(),
+    on_show = function(p)
+      require("aedi.picker").darken(p, grounds)
+    end,
     layout = {
       preset = "select",
       layout = {
