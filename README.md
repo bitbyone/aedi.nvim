@@ -65,6 +65,23 @@ program runs (or is debugged) as IntelliJ's Application configuration would
 run it. The IntelliJ server has to be running. Debug opens the Debug panel.
 `Ctrl-D` in the list, `:AediDebug` and `d` in the Run panel debug.
 
+IntelliJ prints the command line at the top of a run, and the output here
+does too:
+
+```
+▶ Main · Run · x.Main · JAVA_HOME ~/.local/share/mise/installs/java/temurin-25.0.5+8.0.LTS
+/…/temurin-25.0.5+8.0.LTS/bin/java -Dwho=world -Xmx256m -Dfile.encoding=UTF-8 -cp <42 entries> x.Main a b
+```
+
+- The first line is the launch.
+- The second is the JVM's actual command line: which `java`, so which JDK,
+  every VM option and the arguments. The server starts that JVM and does not
+  say how, so the line is found in `ps` once the build is through. It is the
+  new `java` process running the main class, with the classpath shortened.
+
+A program that ends within a fraction of a second can finish before it is
+seen.
+
 Main classes (`fun main`, `static void main` under `src/main`) are offered
 as Application configurations.
 Spring Boot applications are found by their `@SpringBootApplication` under
