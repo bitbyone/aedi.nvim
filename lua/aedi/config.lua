@@ -45,6 +45,14 @@ M.defaults = {
     -- The Debug panel, dap-ui's gutter cleanup and its framed value popup.
     enabled = true,
   },
+  -- Godot projects (lua/aedi/godot.lua).
+  godot = {
+    -- The executable; nil: `godot` / `godot4` on PATH, else /Applications/Godot.app.
+    bin = nil,
+    -- The Godot editor's debug adapter (Editor Settings > Network > Debug Adapter).
+    host = "127.0.0.1",
+    port = 6006,
+  },
   --- A window aedi draws its own winbar in (the Run panel, the Debug panel's
   --- variables window). For a tab line plugin that would otherwise repaint
   --- the winbar.

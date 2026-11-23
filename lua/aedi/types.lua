@@ -8,6 +8,8 @@
 --                 `gradlew [:module:]bootRun --args='...'` / `mvnw
 --                 spring-boot:run -Dspring-boot.run.profiles=...`
 --   gradle        `gradlew <tasks> <args>` (or Maven's wrapper and goals)
+--   godot         `godot --path <project> [scene]`; Debug through the Godot
+--                 editor's debug adapter (lua/aedi/godot.lua)
 --   shell         any command, in any directory
 
 local spring = require("aedi.spring")
@@ -32,6 +34,7 @@ M.fields = {
   tasks = { label = "Tasks", placeholder = "e.g. test --tests '*UserTest'" },
   command = { label = "Command", placeholder = "e.g. go run ./cmd/server" },
   cwd = { label = "Directory", placeholder = "the project root" },
+  scene = { label = "Scene", placeholder = "the main scene · current: the file's · Enter picks one", help = "Enter picks one" },
 }
 
 --- Spring Boot's launchers: the IntelliJ server (Run and Debug), or the
@@ -67,6 +70,11 @@ M.types = {
     fields = { "name", "tasks", "args", "env" },
     args_placeholder = "none (e.g. --info --offline)",
   },
+  godot = {
+    label = "Godot",
+    fields = { "name", "scene", "args", "env" },
+    args_placeholder = "none (after the scene, e.g. --verbose -- --level=3)",
+  },
   shell = {
     label = "Shell command",
     fields = { "name", "command", "args", "cwd", "env" },
@@ -74,7 +82,7 @@ M.types = {
   },
 }
 
-M.order = { "application", "spring-boot", "gradle", "shell" }
+M.order = { "application", "spring-boot", "gradle", "godot", "shell" }
 
 ---@param c aedi.Configuration
 ---@return string
@@ -91,7 +99,7 @@ end
 ---@param c aedi.Configuration
 function M.debuggable(c)
   local t = M.of(c)
-  return t == "application" or (t == "spring-boot" and c.launcher ~= "bootRun")
+  return t == "application" or t == "godot" or (t == "spring-boot" and c.launcher ~= "bootRun")
 end
 
 --- `-Xmx1g "-Dx=a b" 'c d'` -> { "-Xmx1g", "-Dx=a b", "c d" }
@@ -210,6 +218,10 @@ function M.build(c, root)
       cwd = vim.fs.normalize(cwd)
     end
     return { cmd = c.command .. (nonempty(c.args) and (" " .. c.args) or ""), cwd = cwd, env = c.env }
+  end
+
+  if t == "godot" then
+    return require("aedi.godot").build(c, root)
   end
 
   if t == "application" or (t == "spring-boot" and c.launcher ~= "bootRun") then

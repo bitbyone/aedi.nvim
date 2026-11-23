@@ -43,19 +43,20 @@ most recently, come first (frecency).
 | key | |
 | --- | --- |
 | `Enter` | run |
-| `Ctrl-D` | debug (Application, Spring Boot) |
+| `Ctrl-D` | debug (Application, Spring Boot, Godot) |
 | `Ctrl-E` | edit; a found configuration is saved as a copy of your own |
 | `Ctrl-N` | new |
 | `Ctrl-Y` | duplicate |
 | `Ctrl-X` | delete |
 
-There are four types:
+There are five types:
 
 | type | fields | runs |
 | --- | --- | --- |
 | **Application** | main class, arguments, VM options, environment, directory | the main class through the IntelliJ server (Run and **Debug**) |
 | **Spring Boot** | launch, module, profiles, arguments, VM options, environment | its application's main class through the IntelliJ server, profiles as `--spring.profiles.active` (Run and **Debug**); or with launch `bootRun`, `./gradlew [:module:]bootRun --args='…'` / `./mvnw spring-boot:run -Dspring-boot.run.profiles=…` |
 | **Gradle** | tasks, arguments, environment | `./gradlew <tasks> <arguments>` |
+| **Godot** | scene, arguments, environment | `godot --path <project> [scene]` (Run); **Debug** through the Godot editor (see [Godot](#godot)) |
 | **Shell command** | command, arguments, directory, environment | the command, through `'shell'` |
 
 Application and Spring Boot launch through
@@ -111,6 +112,32 @@ The form is a float, laid out like this:
 Configurations are stored per project in
 `stdpath("data")/aedi/configurations.json`, keyed by the project root (the
 working directory by default). Nothing is written into the project.
+
+## Godot
+
+A Godot 4 project (`project.godot` in the root, or in a directory right
+under it) gets two configurations:
+- **Main scene**: the project's `run/main_scene`;
+- **Current scene**: the file you are in, when it is a `.tscn`, or the scene
+  a `.gd` script is attached to.
+
+A saved one can name any scene; `Enter` on Scene in the form lists them.
+
+**Run** starts `godot --path <project> [scene]` in a Run panel tab, so
+`print()`, errors and the engine's log are there with the log colours.
+
+**Debug** goes through the Godot editor's debug adapter (Editor Settings >
+Network > Debug Adapter, port 6006). The editor has to be open on the same
+project. It plays the scene, and the game stops at Neovim's breakpoints in
+the Debug panel. The game's output is a Run panel tab, and the Debug panel's
+Console while the session runs.
+
+`require("aedi.godot").setup()` registers the `godot` adapter for nvim-dap,
+with "Godot: main scene" and "Godot: current scene" for `:DapContinue`.
+aedi calls it itself on the first Godot debug.
+
+The executable is `godot.bin`, else `godot` or `godot4` on PATH, else
+`/Applications/Godot.app`.
 
 ## Gradle tasks
 
@@ -238,6 +265,7 @@ require("aedi").setup({
   console = { height = 15 },
   prompt = { next = { "<Down>", "<C-n>", "<Tab>", "<C-j>" }, prev = { "<Up>", "<C-p>", "<S-Tab>", "<C-k>" } },
   debug = { enabled = true },
+  godot = { bin = nil, host = "127.0.0.1", port = 6006 }, -- the editor's debug adapter
   on_panel = nil,   -- function(win): a window aedi draws its own winbar in
   ignore_buf = nil, -- function(buf): a split buffer that is not code (focus skips it)
 })

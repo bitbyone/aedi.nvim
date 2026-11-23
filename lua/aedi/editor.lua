@@ -119,6 +119,7 @@ local function values_of(c)
     launcher = c.launcher or "intellij",
     main = c.main or "",
     vm = c.vm or "",
+    scene = c.scene or "",
   }
 end
 M.values_of = values_of
@@ -183,7 +184,7 @@ local function decorate(state)
     local right
     if CHOICE[f] then
       right = { { "Enter", "AediFormKey" }, { " change", "AediFormMuted" } }
-    elseif (f == "main" or f == "tasks") and i == cursor then
+    elseif (f == "main" or f == "tasks" or f == "scene") and i == cursor then
       right = { { "Enter", "AediFormKey" }, { " pick", "AediFormMuted" } }
     elseif f == "profiles" then
       local avail = spring.profiles(state.root, state.values.module ~= "" and state.values.module or state.apps[1])
@@ -385,9 +386,46 @@ local function choose_main(state)
   end)
 end
 
+--- A Godot scene: the main one, the current file's, or one of the project's.
+local function choose_scene(state)
+  local godot = require("aedi.godot")
+  local project = godot.project(state.root)
+  if not project then
+    vim.notify("No project.godot in " .. short(state.root), vim.log.levels.INFO)
+    return
+  end
+  local items = { "", "current" }
+  vim.list_extend(items, godot.scenes(project))
+  local main = godot.main_scene(project)
+  vim.ui.select(items, {
+    prompt = "Scene",
+    format_item = function(s)
+      if s == "" then
+        return "Main scene" .. (main and ("  " .. main) or "  (none set)")
+      elseif s == "current" then
+        return "Current scene  the file you are in, or the scene its script is in"
+      end
+      return s
+    end,
+  }, function(s)
+    if s then
+      state.values.scene = s
+      if state.values.name == "" then
+        state.values.name = s == "" and "Main scene" or s == "current" and "Current scene" or vim.fn.fnamemodify(s, ":t:r")
+      end
+      render(state)
+      goto_field(state, "scene")
+    end
+  end)
+end
+
 --- Enter on a field: its choices, or else typing at its end.
 local function enter(state, insert)
   local f = field_at(state)
+  if f == "scene" then
+    vim.cmd("stopinsert")
+    return choose_scene(state)
+  end
   if f == "type" then
     vim.cmd("stopinsert")
     return choose_type(state)

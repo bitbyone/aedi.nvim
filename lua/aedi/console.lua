@@ -487,6 +487,15 @@ function M.start(c, opts)
     end
     return
   end
+  -- A Godot game debugs in the Godot editor, through its debug adapter: the
+  -- output is the "Godot" tab (lua/aedi/godot.lua). Run stays a terminal.
+  if launch.godot and debug then
+    require("aedi.godot").setup()
+    require("aedi.godot").debug(launch.godot)
+    require("aedi.store").set_last(c)
+    M.last_launch = { config = vim.deepcopy(c), debug = true }
+    return
+  end
   if debug then
     vim.notify(("%s cannot be debugged: a %s runs in a terminal, not under the debugger"):format(c.name, types.label(c)), vim.log.levels.WARN)
     return

@@ -16,7 +16,8 @@
 ---@field env? table<string, string>
 ---@field detected? boolean found in the project, not saved
 ---@field kind? "run"|"test"|"build"
----@field type? "shell"|"spring-boot"|"gradle" (nil: shell)
+---@field type? "shell"|"application"|"spring-boot"|"gradle"|"godot" (nil: shell)
+---@field scene? string a Godot scene: res://..., "current", or nil for the main one
 ---@field profiles? string Spring profiles, "a,b"
 ---@field module? string the Spring Boot application's directory
 ---@field tasks? string Gradle tasks
@@ -86,6 +87,7 @@ local function clean(c)
     launcher = (c.launcher and c.launcher ~= "" and c.launcher ~= "intellij") and c.launcher or nil,
     main = (c.main and c.main ~= "") and c.main or nil,
     vm = (c.vm and c.vm ~= "") and c.vm or nil,
+    scene = (c.scene and c.scene ~= "") and c.scene or nil,
     command = c.command,
     args = (c.args and c.args ~= "") and c.args or nil,
     cwd = (c.cwd and c.cwd ~= "" and c.cwd ~= ".") and c.cwd or nil,

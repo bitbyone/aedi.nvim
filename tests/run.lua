@@ -347,6 +347,29 @@ test("gradle: recent lines and suggestions", function()
   eq(items[1].text, "build -x test")
 end)
 
+test("godot: project, scenes, the scene of a script, build", function()
+  local repo = tmp .. "/godot-repo"
+  local p = repo .. "/game"
+  write(p .. "/project.godot", '[application]\n\nconfig/name="g"\nrun/main_scene="res://scenes/main.tscn"\n')
+  write(p .. "/scenes/main.tscn", '[ext_resource type="Script" path="res://scripts/player.gd" id="1"]\n')
+  write(p .. "/scenes/level.tscn", "")
+  write(p .. "/addons/x/plugin.tscn", "")
+  write(p .. "/scripts/player.gd", "extends Node\n")
+  local g = require("aedi.godot")
+  eq(g.project(repo), p, "a project right under the root")
+  eq(g.main_scene(p), "res://scenes/main.tscn")
+  eq(g.scenes(p), { "res://scenes/level.tscn", "res://scenes/main.tscn" })
+  eq(g.scenes_of(p, p .. "/scripts/player.gd"), { "res://scenes/main.tscn" })
+  eq(g.scenes_of(p, p .. "/scenes/level.tscn"), { "res://scenes/level.tscn" })
+  require("aedi.config").options.godot.bin = "/bin/godot"
+  local l = assert(types.build({ name = "Level", type = "godot", scene = "scenes/level.tscn", args = "--verbose" }, repo))
+  eq(l.cmd, "/bin/godot --path " .. p .. " res://scenes/level.tscn --verbose")
+  eq(l.godot, { name = "Level", project = p, scene = "res://scenes/level.tscn", args = { "--verbose" } })
+  eq(types.build({ name = "Main", type = "godot" }, repo).godot.scene, "main")
+  eq(names(require("aedi.detect").all(repo)), { "Main scene", "Current scene" })
+  require("aedi.config").options.godot.bin = nil
+end)
+
 vim.fn.delete(tmp, "rf")
 print(("%d passed, %d failed"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)
