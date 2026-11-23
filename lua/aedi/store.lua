@@ -16,8 +16,7 @@
 ---@field env? table<string, string>
 ---@field detected? boolean found in the project, not saved
 ---@field kind? "run"|"test"|"build"
----@field type? "shell"|"application"|"spring-boot"|"gradle"|"godot" (nil: shell)
----@field scene? string a Godot scene: res://..., "current", or nil for the main one
+---@field type? string "application"|"spring-boot"|"gradle"|"shell" or a registered one (nil: shell)
 ---@field profiles? string Spring profiles, "a,b"
 ---@field module? string the Spring Boot application's directory
 ---@field tasks? string Gradle tasks
@@ -74,6 +73,12 @@ function M.reload()
   data = nil
 end
 
+--- Fields `clean` decides about itself; any other is a registered type's.
+local KNOWN = {
+  name = true, type = true, profiles = true, module = true, tasks = true, launcher = true, main = true,
+  vm = true, command = true, args = true, cwd = true, env = true, detected = true, kind = true,
+}
+
 --- A copy without the fields that only describe where it came from.
 ---@param c aedi.Configuration
 ---@return aedi.Configuration
@@ -87,12 +92,17 @@ local function clean(c)
     launcher = (c.launcher and c.launcher ~= "" and c.launcher ~= "intellij") and c.launcher or nil,
     main = (c.main and c.main ~= "") and c.main or nil,
     vm = (c.vm and c.vm ~= "") and c.vm or nil,
-    scene = (c.scene and c.scene ~= "") and c.scene or nil,
     command = c.command,
     args = (c.args and c.args ~= "") and c.args or nil,
     cwd = (c.cwd and c.cwd ~= "" and c.cwd ~= ".") and c.cwd or nil,
     env = (c.env and next(c.env)) and c.env or nil,
   }
+  -- the fields of a registered type (types.register): kept as they are
+  for k, v in pairs(c) do
+    if not KNOWN[k] and type(v) == "string" and v ~= "" then
+      out[k] = v
+    end
+  end
   return out
 end
 

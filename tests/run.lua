@@ -347,27 +347,56 @@ test("gradle: recent lines and suggestions", function()
   eq(items[1].text, "build -x test")
 end)
 
-test("godot: project, scenes, the scene of a script, build", function()
-  local repo = tmp .. "/godot-repo"
-  local p = repo .. "/game"
-  write(p .. "/project.godot", '[application]\n\nconfig/name="g"\nrun/main_scene="res://scenes/main.tscn"\n')
-  write(p .. "/scenes/main.tscn", '[ext_resource type="Script" path="res://scripts/player.gd" id="1"]\n')
-  write(p .. "/scenes/level.tscn", "")
-  write(p .. "/addons/x/plugin.tscn", "")
-  write(p .. "/scripts/player.gd", "extends Node\n")
-  local g = require("aedi.godot")
-  eq(g.project(repo), p, "a project right under the root")
-  eq(g.main_scene(p), "res://scenes/main.tscn")
-  eq(g.scenes(p), { "res://scenes/level.tscn", "res://scenes/main.tscn" })
-  eq(g.scenes_of(p, p .. "/scripts/player.gd"), { "res://scenes/main.tscn" })
-  eq(g.scenes_of(p, p .. "/scenes/level.tscn"), { "res://scenes/level.tscn" })
-  require("aedi.config").options.godot.bin = "/bin/godot"
-  local l = assert(types.build({ name = "Level", type = "godot", scene = "scenes/level.tscn", args = "--verbose" }, repo))
-  eq(l.cmd, "/bin/godot --path " .. p .. " res://scenes/level.tscn --verbose")
-  eq(l.godot, { name = "Level", project = p, scene = "res://scenes/level.tscn", args = { "--verbose" } })
-  eq(types.build({ name = "Main", type = "godot" }, repo).godot.scene, "main")
-  eq(names(require("aedi.detect").all(repo)), { "Main scene", "Current scene" })
-  require("aedi.config").options.godot.bin = nil
+test("extension: a registered type -- form, build, debug, store, detector", function()
+  local debugged
+  types.register("engine", {
+    label = "Engine",
+    fields = { "name", "level", "args", "env" },
+    field_specs = { level = { label = "Level", placeholder = "the first" } },
+    build = function(c, root)
+      if not c.level then
+        return nil, "no level"
+      end
+      return { cmd = "engine " .. c.level .. (c.args and (" " .. c.args) or ""), cwd = root, env = c.env, level = c.level }
+    end,
+    debug = function(launch, c)
+      debugged = { launch.level, c.name }
+    end,
+    choose = {
+      level = function(ctx, done)
+        ctx.values.level = "boss"
+        done()
+      end,
+    },
+  })
+  eq(types.order[#types.order], "shell", "shell stays last")
+  eq(types.order[#types.order - 1], "engine")
+  eq(types.label({ type = "engine" }), "Engine")
+  eq(types.fields.level.label, "Level")
+  local c = { name = "Boss", type = "engine", level = "boss", args = "--fast" }
+  eq(types.build(c, "/r").cmd, "engine boss --fast")
+  eq(select(2, types.build({ name = "x", type = "engine" }, "/r")), "no level")
+  assert(types.debuggable(c), "a type with debug is debuggable")
+  -- the form round trip keeps the type's own field
+  local state = { type = "engine", apps = {}, values = editor.values_of(c) }
+  eq(editor.to_config(state), { name = "Boss", type = "engine", level = "boss", args = "--fast" })
+  -- debug goes to the type's own
+  require("aedi.console").start(c, { debug = true })
+  eq(debugged, { "boss", "Boss" })
+  -- saved with its own field
+  local store = require("aedi.store")
+  store.put(c, nil, "/engine-project")
+  eq(store.get("Boss", "/engine-project").level, "boss")
+  -- a detector from the options
+  local root = tmp .. "/engine-root"
+  vim.fn.mkdir(root, "p")
+  local opts = require("aedi.config").options
+  opts.detectors = { function()
+    return { { name = "Play", type = "engine", level = "intro", kind = "run" } }
+  end }
+  local found = require("aedi.detect").all(root)
+  eq(found[#found].name, "Play")
+  opts.detectors = {}
 end)
 
 vim.fn.delete(tmp, "rf")

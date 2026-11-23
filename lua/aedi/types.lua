@@ -8,9 +8,9 @@
 --                 `gradlew [:module:]bootRun --args='...'` / `mvnw
 --                 spring-boot:run -Dspring-boot.run.profiles=...`
 --   gradle        `gradlew <tasks> <args>` (or Maven's wrapper and goals)
---   godot         `godot --path <project> [scene]`; Debug through the Godot
---                 editor's debug adapter (lua/aedi/godot.lua)
 --   shell         any command, in any directory
+--
+-- and any registered with `register` (below).
 
 local spring = require("aedi.spring")
 
@@ -34,7 +34,6 @@ M.fields = {
   tasks = { label = "Tasks", placeholder = "e.g. test --tests '*UserTest'" },
   command = { label = "Command", placeholder = "e.g. go run ./cmd/server" },
   cwd = { label = "Directory", placeholder = "the project root" },
-  scene = { label = "Scene", placeholder = "the main scene · current: the file's · Enter picks one", help = "Enter picks one" },
 }
 
 --- Spring Boot's launchers: the IntelliJ server (Run and Debug), or the
@@ -49,6 +48,10 @@ M.launchers = {
 ---@field fields string[]
 ---@field args_placeholder? string
 ---@field hidden? fun(field: string, values: table): boolean a field this configuration does not use
+---@field field_specs? table<string, aedi.Field> fields of its own (register)
+---@field build? fun(c: aedi.Configuration, root: string): aedi.Launch?, string? (register)
+---@field debug? fun(launch: aedi.Launch, c: aedi.Configuration) (register)
+---@field choose? table<string, fun(ctx: { root: string, values: table<string, string> }, done: fun())> (register)
 
 ---@type table<string, aedi.Type>
 M.types = {
@@ -70,11 +73,6 @@ M.types = {
     fields = { "name", "tasks", "args", "env" },
     args_placeholder = "none (e.g. --info --offline)",
   },
-  godot = {
-    label = "Godot",
-    fields = { "name", "scene", "args", "env" },
-    args_placeholder = "none (after the scene, e.g. --verbose -- --level=3)",
-  },
   shell = {
     label = "Shell command",
     fields = { "name", "command", "args", "cwd", "env" },
@@ -82,7 +80,39 @@ M.types = {
   },
 }
 
-M.order = { "application", "spring-boot", "gradle", "godot", "shell" }
+M.order = { "application", "spring-boot", "gradle", "shell" }
+
+--- A type of your own, next to the built-in ones (before Shell command in
+--- the form's list):
+---
+---   require("aedi.types").register("mytool", {
+---     label = "My tool",
+---     fields = { "name", "target", "args", "env" },   -- "name" first
+---     field_specs = { target = { label = "Target", placeholder = "…", help = "Enter picks one" } },
+---     build = function(c, root) return { cmd = "…", cwd = root, env = c.env } end,
+---     debug = function(launch, c) … end,              -- optional: Debug
+---     choose = { target = function(ctx, done) … end }, -- optional: Enter on a field
+---   })
+---
+--- `build` returns an `aedi.Launch` (or nil and why not): Run runs its `cmd`
+--- in a Run panel tab. It may carry anything else `debug` needs. `debug`
+--- debugs it however the tool does (nvim-dap, say). A chooser gets
+--- `ctx = { root, values }`, sets `ctx.values[field]` (and any other) and
+--- calls `done()`. A configuration keeps its own fields (`c.target`) when
+--- saved.
+---@param id string
+---@param spec aedi.Type
+function M.register(id, spec)
+  assert(spec.label and spec.fields and spec.build, "aedi.types.register: label, fields and build are required")
+  for f, s in pairs(spec.field_specs or {}) do
+    M.fields[f] = s
+  end
+  local fresh = M.types[id] == nil
+  M.types[id] = spec
+  if fresh then
+    table.insert(M.order, #M.order, id)
+  end
+end
 
 ---@param c aedi.Configuration
 ---@return string
@@ -99,7 +129,7 @@ end
 ---@param c aedi.Configuration
 function M.debuggable(c)
   local t = M.of(c)
-  return t == "application" or t == "godot" or (t == "spring-boot" and c.launcher ~= "bootRun")
+  return t == "application" or (t == "spring-boot" and c.launcher ~= "bootRun") or M.types[t].debug ~= nil
 end
 
 --- `-Xmx1g "-Dx=a b" 'c d'` -> { "-Xmx1g", "-Dx=a b", "c d" }
@@ -220,8 +250,8 @@ function M.build(c, root)
     return { cmd = c.command .. (nonempty(c.args) and (" " .. c.args) or ""), cwd = cwd, env = c.env }
   end
 
-  if t == "godot" then
-    return require("aedi.godot").build(c, root)
+  if M.types[t].build then
+    return M.types[t].build(c, root)
   end
 
   if t == "application" or (t == "spring-boot" and c.launcher ~= "bootRun") then

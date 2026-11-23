@@ -106,6 +106,14 @@ function M.listen(match, console)
   end
 end
 
+--- The output of a debug adapter that runs the program itself, as a Run
+--- panel tab and the Debug panel's Console (lua/aedi/debug/output.lua).
+---@param spec aedi.OutputTabSpec
+---@return { buf: fun(): integer }
+function M.output_tab(spec)
+  return require("aedi.debug.output")(spec)
+end
+
 --- Show / hide the Debug panel while a session runs.
 function M.toggle()
   require("aedi.debug.view").toggle()

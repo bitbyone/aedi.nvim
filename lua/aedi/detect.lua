@@ -200,18 +200,7 @@ local function make(root)
   return out
 end
 
---- A Godot project: its main scene, and the scene of the file you are in.
-local function godot(root)
-  if not require("aedi.godot").project(root) then
-    return {}
-  end
-  return {
-    { name = "Main scene", type = "godot", kind = "run", detected = true },
-    { name = "Current scene", type = "godot", scene = "current", kind = "run", detected = true },
-  }
-end
-
-M.builtin = { spring_boot, applications, gradle, godot, go, cargo, node, make }
+M.builtin = { spring_boot, applications, gradle, go, cargo, node, make }
 
 --- Everything the detectors find in `root`.
 ---@param root string

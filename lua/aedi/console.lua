@@ -487,11 +487,11 @@ function M.start(c, opts)
     end
     return
   end
-  -- A Godot game debugs in the Godot editor, through its debug adapter: the
-  -- output is the "Godot" tab (lua/aedi/godot.lua). Run stays a terminal.
-  if launch.godot and debug then
-    require("aedi.godot").setup()
-    require("aedi.godot").debug(launch.godot)
+  -- A registered type that debugs its own way (types.register): it gets the
+  -- launch; Run stays a terminal tab.
+  local spec = types.types[types.of(c)]
+  if debug and spec.debug then
+    spec.debug(launch, c)
     require("aedi.store").set_last(c)
     M.last_launch = { config = vim.deepcopy(c), debug = true }
     return
